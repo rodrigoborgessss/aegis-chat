@@ -52,7 +52,10 @@ function register() {
   Session.buildBundle(store, 5).then(bundle => { bundle.dn = displayName; ws.send(JSON.stringify({ type: "register", bundle })); });
 }
 function connect() {
-  ws = new WebSocket(`ws://${location.host}`);
+  // Configuração dinâmica do protocolo para evitar erros de Mixed Content
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  ws = new WebSocket(`${protocol}//${location.host}`);
+  
   ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token: authToken }));
   ws.onclose = () => { if (authToken) setTimeout(connect, 1500); };
   ws.onmessage = async ev => {
@@ -64,6 +67,7 @@ function connect() {
     else if (m.type === "deliver") await onDeliver(m.from, m.envelope);
   };
 }
+
 function handleAuthFail() {
   localStorage.removeItem("ratchet-auth");
   authToken = null; entered = false;
