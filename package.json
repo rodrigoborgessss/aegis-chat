@@ -1,0 +1,14 @@
+{
+  "name": "ratchet-chat",
+  "version": "0.1.0",
+  "type": "module",
+  "private": true,
+  "scripts": {
+    "start": "node server.js",
+    "test": "node tests/run.mjs",
+    "test:e2e": "node tests/run-e2e.mjs"
+  },
+  "dependencies": {
+    "ws": "^8.21.0"
+  }
+}

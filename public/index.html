@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>AegisChat</title>
+<style>
+  :root{
+    --ink:#0B1016;--bg:#0E141B;--panel:#161F29;--panel-2:#1C2733;--line:#26323F;
+    --text:#E7EEF5;--muted:#8696A6;--accent:#5B6CF0;--accent-soft:#2A3550;
+    --safe:#34B98A;--danger:#DB5C45;
+    --mono:ui-monospace,"SF Mono","JetBrains Mono",Menlo,Consolas,monospace;
+    --sans:"Segoe UI",system-ui,-apple-system,Roboto,Helvetica,sans-serif;
+  }
+  *{box-sizing:border-box}
+  *{scrollbar-width:thin;scrollbar-color:var(--line) transparent}
+  ::-webkit-scrollbar{width:7px;height:7px}
+  ::-webkit-scrollbar-track{background:transparent}
+  ::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px}
+  ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
+  html,body{margin:0;height:100%}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased}
+  button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
+  input{font:inherit;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:10px 14px;outline:none}
+  input:focus{border-color:var(--accent)}
+  .avatar{flex:none;display:grid;place-items:center;border-radius:50%;color:#fff;font-weight:600}
+
+  /* ---------- login ---------- */
+  #login{height:100%;display:flex;align-items:center;justify-content:center;padding:24px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:18px;padding:30px;max-width:360px;width:100%;text-align:center}
+  .card .logo{width:56px;height:56px;border-radius:16px;background:linear-gradient(135deg,var(--accent),#9b8cf0);margin:0 auto 14px;display:grid;place-items:center;font-size:26px}
+  .card h1{margin:0 0 4px;font-size:20px} .card p{margin:0 0 18px;color:var(--muted);font-size:13.5px}
+  .card .row{display:flex;gap:8px} .card input{flex:1}
+  .fields{display:flex;flex-direction:column;gap:9px}
+  .card .go{background:var(--accent);color:#fff;border-radius:999px;padding:11px 16px;font-weight:600;width:100%}
+  .card .go:disabled{opacity:.6;cursor:default}
+  .login-foot{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-top:4px;min-height:18px}
+  .login-err{color:var(--danger);font-size:12px;text-align:left;flex:1}
+  .linkbtn{background:none;border:none;color:var(--accent);font-size:12.5px;cursor:pointer;padding:0;white-space:nowrap}
+  .linkbtn:hover{text-decoration:underline}
+  .card p b{color:var(--text)}
+  .hint{margin-top:16px;font-size:12px;color:var(--muted);line-height:1.5}
+
+  /* ---------- app shell ---------- */
+  #app{display:none;height:100%}
+  #app.ready{display:flex}
+  .sidebar{width:300px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--ink);position:relative}
+  .me-bar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .me-id{display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;border-radius:10px;padding:5px;margin:-5px}
+  .me-id:hover{background:var(--panel-2)}
+  .me-bar .avatar{width:36px;height:36px;font-size:15px}
+  .me-bar .who{flex:1;min-width:0}
+  .me-bar .who .lbl{font-size:11px;color:var(--muted)} .me-bar .who .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .icon-btn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
+  .icon-btn:hover{background:var(--panel-2);color:var(--text)}
+  .fab-stack{position:absolute;right:16px;bottom:16px;z-index:6;display:flex;flex-direction:column;gap:12px;align-items:center}
+  .fab{width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;display:grid;place-items:center;box-shadow:0 8px 20px rgba(0,0,0,.45);border:none;cursor:pointer;transition:transform .12s,filter .12s,border-color .12s,background .12s}
+  .fab-2{width:48px;height:48px;background:var(--panel-2);color:var(--accent);border:1px solid var(--line);box-shadow:0 6px 16px rgba(0,0,0,.38)}
+  .fab-2:hover{border-color:var(--accent);background:var(--panel)}
+  .fab:hover{filter:brightness(1.08);transform:translateY(-1px)}
+  .fab:active{transform:translateY(0)}
+  .new-conv{display:flex;gap:8px}
+  .new-conv input{flex:1;min-width:0}
+  .add{background:var(--accent);color:#fff;border-radius:50%;width:40px;height:40px;flex:none;font-size:20px;display:grid;place-items:center;border:none;cursor:pointer}
+  .add:hover{filter:brightness(1.08)}
+  .convos{flex:1;overflow-y:auto;padding-bottom:132px}
+  .convo{display:flex;align-items:center;gap:11px;padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(38,50,63,.5)}
+  .convo:hover{background:var(--panel)} .convo.active{background:var(--panel-2)}
+  .convo .avatar{width:42px;height:42px;font-size:17px}
+  .convo .body{flex:1;min-width:0} .convo .name{font-weight:600;font-size:14.5px}
+  .convo .preview{font-size:12.5px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .convo .unread{flex:none;min-width:20px;height:20px;border-radius:999px;background:var(--accent);color:#fff;font-size:11px;font-weight:600;display:grid;place-items:center;padding:0 6px}
+  .convos .empty{color:var(--muted);font-size:13px;text-align:center;padding:30px 18px}
+
+  .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
+  .chat-empty{flex:1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:24px}
+  .chat-empty .ico{font-size:40px;opacity:.5;margin-bottom:10px}
+  .chat-header{display:none;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--ink)}
+  .chat-header .avatar{width:38px;height:38px;font-size:16px}
+  .chat-header .ti{flex:1;min-width:0}
+  .chat-header .nm{font-weight:600;display:flex;align-items:center;gap:7px}
+  .chat-header .st{font-size:12px;color:var(--muted)}
+  .vbadge{font-size:11px;color:var(--safe)} 
+  .shield{color:var(--muted)} .shield.on{color:var(--safe)}
+  .back{display:none}
+
+  .stream{flex:1;overflow-y:auto;overflow-x:hidden;padding:18px 16px;display:flex;flex-direction:column;gap:3px}
+  .day{align-self:center;font-size:11px;color:var(--muted);background:var(--panel);padding:3px 10px;border-radius:999px;margin:8px 0}
+  .row{display:flex;flex-direction:column;max-width:74%;min-width:0}
+  .row.me{align-self:flex-end;align-items:flex-end} .row.them{align-self:flex-start;align-items:flex-start}
+  .bubble{padding:8px 12px;border-radius:18px;font-size:14.5px;line-height:1.4;overflow-wrap:anywhere;word-break:break-word;white-space:pre-wrap}
+  .row.me .bubble{background:var(--accent);color:#fff;border-bottom-right-radius:5px}
+  .row.them .bubble{background:var(--panel-2);color:var(--text);border-bottom-left-radius:5px}
+  .media-img{max-width:min(260px,72vw);max-height:340px;height:auto;border-radius:14px;display:block;cursor:zoom-in}
+  .media-audio{padding:6px 8px} .media-audio audio{display:block;width:min(230px,64vw);height:36px}
+  .audio-player{display:flex;align-items:center;gap:9px;padding:8px 12px;min-width:170px}
+  .ap-play{flex:none;width:32px;height:32px;border-radius:50%;display:grid;place-items:center;font-size:13px;background:rgba(255,255,255,.18)}
+  .row.them .ap-play{background:var(--panel)}
+  .ap-wave{flex:1;height:30px;cursor:pointer}
+  .ap-time{flex:none;font-size:11px;opacity:.85;font-variant-numeric:tabular-nums;min-width:30px;text-align:right}
+  .typing-bubble{background:var(--panel-2);border-radius:18px;border-bottom-left-radius:5px;padding:13px 15px;width:fit-content;display:flex;gap:7px;align-items:center}
+  .typing-bubble .dots{display:flex;gap:4px;align-items:center}
+  .typing-bubble .dots span{width:7px;height:7px;border-radius:50%;background:var(--muted);display:inline-block;animation:typingdot 1.3s infinite}
+  .typing-bubble .dots span:nth-child(2){animation-delay:.18s} .typing-bubble .dots span:nth-child(3){animation-delay:.36s}
+  .act-mic{font-size:14px;line-height:1;animation:micpulse 1s infinite}
+  .act-label{font-size:12px;color:var(--muted)}
+  .typing-bubble.recording .act-mic{filter:hue-rotate(0)}
+  .eq{display:flex;align-items:flex-end;gap:2px;height:16px}
+  .eq i{width:3px;height:5px;border-radius:2px;background:var(--danger);animation:eqbar .9s ease-in-out infinite}
+  .eq i:nth-child(2){animation-delay:.15s} .eq i:nth-child(3){animation-delay:.3s} .eq i:nth-child(4){animation-delay:.45s}
+  @keyframes typingdot{0%,60%,100%{transform:translateY(0);opacity:.35}30%{transform:translateY(-4px);opacity:.9}}
+  @keyframes micpulse{50%{opacity:.4}}
+  @keyframes eqbar{0%,100%{height:5px}50%{height:15px}}
+  .media-file{display:flex;align-items:center;gap:8px;text-decoration:none;max-width:min(240px,70vw)}
+  .media-file span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .row.me .media-file{background:var(--accent);color:#fff} .row.them .media-file{background:var(--panel-2);color:var(--text)}
+  #lightbox{display:none;position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:50;align-items:center;justify-content:center;padding:20px;cursor:zoom-out}
+  #lightbox.open{display:flex}
+  #lightbox img{max-width:100%;max-height:100%;border-radius:8px}
+  #micBtn.recording{color:var(--danger);animation:pulse 1s infinite}
+  @keyframes pulse{50%{opacity:.4}}
+  .stamp{font-size:10.5px;color:var(--muted);margin:2px 4px 4px;display:flex;gap:6px;align-items:center}
+  .stamp .rt{color:var(--accent)}
+  .row.me .stamp .rt{color:#bcd0ff}
+  .sys{align-self:center;text-align:center;font-size:12px;color:var(--muted);background:rgba(224,162,78,.08);border:1px solid rgba(224,162,78,.25);padding:6px 12px;border-radius:10px;margin:6px 0;max-width:80%}
+
+  .composer{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);align-items:center;background:var(--ink)}
+  .composer input{flex:1}
+  .composer .send{background:var(--accent);color:#fff;border-radius:50%;width:42px;height:42px;flex:none;display:grid;place-items:center;font-size:18px}
+  .composer .send:disabled{opacity:.4;cursor:not-allowed}
+
+  /* verify sheet */
+  .sheet{position:absolute;inset:0;background:rgba(8,12,18,.6);display:none;align-items:center;justify-content:center;padding:20px;z-index:5}
+  .sheet.open{display:flex}
+  .sheet-card{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:22px;max-width:420px;width:100%}
+  .sheet-card h3{margin:0 0 4px;font-size:16px} .sheet-card .desc{color:var(--muted);font-size:13px;margin:0 0 16px}
+  .num{font-family:var(--mono);font-size:16px;line-height:2.1;letter-spacing:.04em;text-align:center;color:var(--text);background:var(--panel-2);border-radius:12px;padding:14px}
+  .sheet-actions{display:flex;gap:8px;margin-top:16px}
+  .sheet-actions .ok{flex:1;background:var(--accent);color:#fff;border-radius:999px;padding:11px;font-weight:600}
+  .sheet-actions .cancel{background:var(--panel-2);color:var(--muted);border-radius:999px;padding:11px 16px}
+  .dm-opts{display:flex;flex-direction:column;gap:8px}
+  .dm-opts button{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px 14px;text-align:left;font-size:14px}
+  .dm-opts button:hover{border-color:var(--accent)}
+  .dm-opts button.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .icon-btn.on{color:var(--accent)}
+  .add.ghost{background:var(--panel-2);color:var(--muted);border:1px solid var(--line)}
+  .row .sender{font-size:11.5px;font-weight:600;margin:0 4px 2px}
+  .members{display:flex;flex-direction:column;gap:9px;max-height:220px;overflow-y:auto}
+  .mem{display:flex;align-items:center;gap:9px;font-size:14px;padding:4px;border-radius:9px}
+  .mem.tappable{cursor:pointer} .mem.tappable:hover{background:var(--panel-2)}
+  .contact{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer}
+  .contact:hover{background:var(--panel-2)}
+  .contact .info{flex:1;min-width:0}
+  .contact .info .n{font-size:14px;font-weight:500}
+  .contact .info .h{font-size:11.5px;color:var(--muted)}
+  .contact .rm{color:var(--muted);font-size:18px;padding:2px 8px;border-radius:6px;background:none;border:none;cursor:pointer}
+  .contact .rm:hover{color:var(--danger)}
+  .contacts-empty{color:var(--muted);font-size:13px;text-align:center;padding:20px}
+  .flbl{display:block;font-size:11px;text-transform:uppercase;letter-spacing:.06em;color:var(--muted);margin:10px 0 6px}
+  .finput{width:100%;border-radius:10px}
+  .acct-actions{display:flex;flex-direction:column;gap:8px}
+  .btn-soft{background:var(--panel-2);color:var(--text);border:1px solid var(--line);border-radius:10px;padding:12px;font-size:14px;cursor:pointer;text-align:center}
+  .btn-soft.full{width:100%}
+  .btn-primary{width:100%;margin-top:10px;background:var(--accent);color:#fff;border:none;border-radius:10px;padding:12px;font-size:14px;font-weight:600;cursor:pointer;transition:filter .12s}
+  .btn-primary:hover{filter:brightness(1.08)}
+  .or-sep{display:flex;align-items:center;gap:12px;color:var(--muted);font-size:11px;text-transform:uppercase;letter-spacing:.08em;margin:16px 0}
+  .or-sep::before,.or-sep::after{content:"";flex:1;height:1px;background:var(--line)}
+  .btn-soft:hover{border-color:var(--accent)}
+  .btn-danger2{background:transparent;color:var(--danger);border:1px solid var(--danger);border-radius:10px;padding:12px;font-size:14px;cursor:pointer;text-align:center}
+  .btn-danger2:hover{background:rgba(219,92,69,.12)}
+  .btn-danger2.armed{background:var(--danger);color:#fff}
+  .acct-head{display:flex;align-items:center;gap:16px;margin:10px 0 20px}
+  .acct-head .avatar{width:72px;height:72px;font-size:30px;box-shadow:0 0 0 3px var(--panel-2),0 0 0 4px var(--line)}
+  .acct-id{flex:1;min-width:0}
+  .acct-name{font-weight:700;font-size:17px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .acct-handle{font-size:12.5px;color:var(--muted);margin-bottom:9px}
+  .acct-photo-btns{display:flex;gap:6px}
+  .chip{background:var(--accent);color:#fff;border:none;border-radius:999px;padding:6px 13px;font-size:12.5px;cursor:pointer}
+  .chip:hover{filter:brightness(1.08)}
+  .chip.ghost{background:transparent;color:var(--muted);border:1px solid var(--line)}
+  .chip.ghost:hover{color:var(--text);border-color:var(--muted);filter:none}
+  .name-edit{display:flex;gap:8px}
+  .name-edit input{flex:1;border-radius:10px}
+  .name-edit button{background:var(--accent);color:#fff;border:none;border-radius:10px;padding:0 18px;font-size:14px;font-weight:600;cursor:pointer}
+  .name-edit button:hover{filter:brightness(1.08)}
+  .danger-zone{margin-top:18px;padding-top:14px;border-top:1px solid var(--line)}
+  .setting{display:flex;align-items:center;justify-content:space-between;gap:14px;padding:13px 0;border-bottom:1px solid var(--line)}
+  .setting-t{font-size:14px} .setting-d{font-size:12px;color:var(--muted);margin-top:2px}
+  .toggle{flex:none;width:44px;height:26px;border-radius:999px;background:var(--panel-2);border:1px solid var(--line);position:relative;cursor:pointer;transition:background .15s,border-color .15s}
+  .toggle::after{content:"";position:absolute;top:2px;left:2px;width:20px;height:20px;border-radius:50%;background:var(--muted);transition:transform .15s,background .15s}
+  .toggle.on{background:var(--accent);border-color:var(--accent)}
+  .toggle.on::after{transform:translateX(18px);background:#fff}
+  .dz-label{display:block;font-size:10.5px;text-transform:uppercase;letter-spacing:.08em;color:var(--danger);opacity:.85;margin-bottom:8px}
+  .select-list{display:flex;flex-direction:column;gap:6px;max-height:220px;overflow-y:auto}
+  .select-item{display:flex;align-items:center;gap:10px;padding:8px;border-radius:10px;cursor:pointer;border:1px solid var(--line)}
+  .select-item.sel{border-color:var(--accent);background:var(--accent-soft)}
+  .select-item .nm{flex:1;font-size:14px}
+  .select-item .check{color:var(--muted)} .select-item.sel .check{color:var(--accent)}
+  .select-empty{color:var(--muted);font-size:12.5px;padding:8px;text-align:center}
+  img.avatar{object-fit:cover}
+
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10}
+  .toast.show{opacity:1}
+
+  @media(max-width:680px){
+    .sidebar{width:100%} .main{display:none}
+    #app.chat-open .sidebar{display:none} #app.chat-open .main{display:flex}
+    .back{display:grid}
+  }
+</style>
+</head>
+<body>
+  <div id="login">
+    <div class="card">
+      <div class="logo">🔒</div>
+      <h1>AegisChat</h1>
+      <p id="loginSub">Entra na tua conta.</p>
+      <div class="fields">
+        <input id="username" placeholder="username" autocomplete="username" autocapitalize="off" spellcheck="false">
+        <input id="password" type="password" placeholder="palavra-passe" autocomplete="current-password">
+        <button id="enter" class="go">Entrar</button>
+        <div class="login-foot">
+          <span id="loginErr" class="login-err"></span>
+          <button id="toggleMode" class="linkbtn" type="button">Criar conta</button>
+        </div>
+      </div>
+      <div class="hint">As chaves ficam só neste browser. O servidor nunca vê o conteúdo.</div>
+    </div>
+  </div>
+
+  <div id="app">
+    <aside class="sidebar">
+      <div class="me-bar">
+        <div class="me-id" id="meProfile" title="o teu perfil">
+          <div class="avatar" id="meAvatar"></div>
+          <div class="who"><div class="nm" id="meName"></div><div class="lbl" id="meHandle"></div></div>
+        </div>
+        <button class="icon-btn" id="settingsBtn" title="definições">⚙</button>
+      </div>
+      <div class="convos" id="convoList"><div class="empty">Sem conversas. Toca no ＋ para começar.</div></div>
+      <div class="fab-stack">
+        <button class="fab fab-2" id="contactsFab" title="contactos" aria-label="contactos">
+          <svg viewBox="0 0 24 24" width="23" height="23" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M19 4H8a2 2 0 0 0-2 2v12a2 2 0 0 0 2 2h11a1 1 0 0 0 1-1V5a1 1 0 0 0-1-1z"/>
+            <path d="M6 8H3.5M6 12H3.5M6 16H3.5"/>
+            <circle cx="13" cy="11" r="2.3"/>
+            <path d="M9.6 16.4a3.6 3.6 0 0 1 6.8 0"/>
+          </svg>
+        </button>
+        <button class="fab" id="fab" title="nova conversa" aria-label="nova conversa">＋</button>
+      </div>
+    </aside>
+
+    <main class="main">
+      <div class="chat-empty" id="chatEmpty"><div><div class="ico">💬</div>Escolhe ou abre uma conversa</div></div>
+
+      <div class="chat-header" id="chatHeader">
+        <button class="icon-btn back" id="backBtn">‹</button>
+        <div class="avatar" id="peerAvatar"></div>
+        <div class="ti">
+          <div class="nm"><span id="peerName"></span><span class="vbadge" id="verifiedBadge" style="display:none">✓ verificado</span></div>
+          <div class="st" id="peerStatus">encriptado ponta-a-ponta</div>
+        </div>
+        <button class="icon-btn" id="dmBtn" title="mensagens temporárias">⏱</button>
+        <button class="icon-btn" id="groupBtn" title="info do grupo" style="display:none">👥</button>
+        <button class="icon-btn shield" id="verifyBtn" title="verificar identidade">🛡</button>
+        <button class="icon-btn" id="convMenuBtn" title="opções da conversa">⋯</button>
+      </div>
+
+      <div class="stream" id="stream"></div>
+
+      <div class="composer" id="composer" style="display:none">
+        <button class="icon-btn" id="attachBtn" title="anexar foto ou ficheiro">📎</button>
+        <button class="icon-btn" id="micBtn" title="gravar áudio">🎤</button>
+        <input id="msg" placeholder="Mensagem" autocomplete="off">
+        <button class="send" id="send">➤</button>
+        <input type="file" id="fileInput" style="display:none">
+      </div>
+    </main>
+
+    <div id="lightbox"><img id="lightboxImg" src="" alt="imagem"></div>
+
+    <div class="sheet" id="verifyPanel">
+      <div class="sheet-card">
+        <h3>Número de segurança</h3>
+        <p class="desc">Compara estes 60 dígitos com os do outro lado (por voz ou outro canal). Se forem iguais, ninguém trocou as chaves no meio.</p>
+        <div class="num" id="verifyNum">—</div>
+        <div class="sheet-actions">
+          <button class="ok" id="markVerified">Coincidem — verificar</button>
+          <button class="cancel" id="closeVerify">fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet" id="dmPanel">
+      <div class="sheet-card">
+        <h3>Mensagens temporárias</h3>
+        <p class="desc">As mensagens desta conversa apagam-se sozinhas depois do tempo escolhido — dos dois lados. O outro lado é avisado da escolha.</p>
+        <div class="dm-opts" id="dmOpts">
+          <button data-secs="0">Desligado</button>
+          <button data-secs="10">10 segundos</button>
+          <button data-secs="60">1 minuto</button>
+          <button data-secs="300">5 minutos</button>
+        </div>
+        <div class="sheet-actions"><button class="cancel" id="closeDm">fechar</button></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="groupPanel">
+      <div class="sheet-card">
+        <h3 id="grpTitle">Grupo</h3>
+        <p class="desc">Membros</p>
+        <div class="members" id="grpMembers"></div>
+        <div class="new-conv" style="padding:0;border:none;margin-top:12px">
+          <input id="grpAddUser" placeholder="adicionar username" autocomplete="off">
+          <button class="add" id="grpAddBtn" title="adicionar">＋</button>
+        </div>
+        <div class="sheet-actions" style="margin-top:14px">
+          <button class="cancel" id="grpLeave" style="color:var(--danger);border:1px solid var(--danger)">Sair do grupo</button>
+          <button class="cancel" id="closeGroup">fechar</button>
+        </div>
+      </div>
+    </div>
+
+    <div class="sheet" id="contactsPanel">
+      <div class="sheet-card">
+        <h3>Contactos</h3>
+        <p class="desc">Guarda pessoas para abrir conversa com um toque.</p>
+        <div class="new-conv" style="padding:0;border:none;margin-bottom:12px">
+          <input id="contactAdd" placeholder="adicionar username" autocomplete="off">
+          <button class="add" id="contactAddBtn" title="adicionar">＋</button>
+        </div>
+        <div class="members" id="contactsList"></div>
+        <div class="sheet-actions" style="margin-top:14px"><button class="cancel" id="closeContacts">fechar</button></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="profilePanel">
+      <div class="sheet-card">
+        <h3>Perfil</h3>
+        <div class="acct-head">
+          <div class="avatar" id="acAvatar"></div>
+          <div class="acct-id">
+            <div class="acct-name" id="acHeadName">—</div>
+            <div class="acct-handle" id="acHandle">@user</div>
+            <div class="acct-photo-btns">
+              <button id="acPhotoBtn" class="chip">Alterar foto</button>
+              <button id="acPhotoRm" class="chip ghost">Remover</button>
+            </div>
+          </div>
+          <input type="file" id="acPhotoInput" accept="image/*" style="display:none">
+        </div>
+        <label class="flbl">Nome público</label>
+        <div class="name-edit">
+          <input id="acName" autocomplete="off">
+          <button id="acSaveName" title="guardar">Guardar</button>
+        </div>
+        <div class="sheet-actions" style="margin-top:16px"><button class="cancel" id="closeProfile">fechar</button></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="settingsPanel">
+      <div class="sheet-card">
+        <h3>Definições</h3>
+        <div class="setting">
+          <div><div class="setting-t">Som ao receber mensagem</div><div class="setting-d">Um sinal sonoro quando chega algo.</div></div>
+          <button class="toggle" id="setSound" type="button" role="switch"></button>
+        </div>
+        <div class="setting">
+          <div><div class="setting-t">Notificações</div><div class="setting-d">Avisos do browser quando a app está em segundo plano.</div></div>
+          <button class="toggle" id="setNotify" type="button" role="switch"></button>
+        </div>
+        <button id="acLogout" class="btn-soft" style="margin-top:18px">Sair — mantém as conversas</button>
+        <div class="danger-zone">
+          <span class="dz-label">Zona perigosa</span>
+          <button id="acWipe" class="btn-danger2">Esquecer este dispositivo (apaga tudo)</button>
+        </div>
+        <div class="sheet-actions" style="margin-top:14px"><button class="cancel" id="closeSettings">fechar</button></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="convMenu">
+      <div class="sheet-card">
+        <h3 id="cmTitle">Conversa</h3>
+        <div class="acct-actions">
+          <button id="cmClearMine" class="btn-soft">Limpar mensagens — só para mim</button>
+          <button id="cmClearAll" class="btn-soft">Limpar mensagens — para todos</button>
+          <button id="cmDelete" class="btn-danger2">Apagar conversa</button>
+        </div>
+        <div class="sheet-actions" style="margin-top:12px"><button class="cancel" id="cmCancel">fechar</button></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="newConvPanel">
+      <div class="sheet-card">
+        <h3>Nova conversa</h3>
+        <label class="flbl">Com quem queres falar</label>
+        <input id="newPeer" class="finput" autocomplete="off" placeholder="username (ex.: bob)">
+        <button id="addPeer" class="btn-primary">Conversar</button>
+        <div class="or-sep">ou</div>
+        <button id="newGroup" class="btn-soft full">＋ Criar um grupo</button>
+        <div class="sheet-actions" style="margin-top:16px"><button class="cancel" id="closeNewConv">fechar</button></div>
+      </div>
+    </div>
+
+    <div class="sheet" id="newGroupPanel">
+      <div class="sheet-card">
+        <h3>Novo grupo</h3>
+        <label class="flbl">Nome do grupo</label>
+        <input id="ngName" class="finput" autocomplete="off" placeholder="ex.: Equipa">
+        <label class="flbl">Membros</label>
+        <div class="select-list" id="ngContacts"></div>
+        <input id="ngMembers" class="finput" autocomplete="off" placeholder="ou escreve outros usernames, separados por vírgula" style="margin-top:8px">
+        <div class="sheet-actions" style="margin-top:16px">
+          <button class="ok" id="ngCreate">Criar grupo</button>
+          <button class="cancel" id="ngCancel">cancelar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script type="module" src="app.js"></script>
+</body>
+</html>
