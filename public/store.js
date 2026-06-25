@@ -2,7 +2,7 @@
 // Assim dois separadores no mesmo browser são dois dispositivos independentes
 // (não partilham identidade nem sessões). Guarda CryptoKey diretamente.
 const VER = 2;
-const dbName = user => `ratchet-chat-${user}`;
+const dbName = user => `aegis-chat-${user}`;
 let _db = null, _dbName = null;
 
 function open(name) {

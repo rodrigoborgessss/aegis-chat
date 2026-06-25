@@ -118,6 +118,12 @@
   #lightbox.open{display:flex}
   #lightbox img{max-width:100%;max-height:100%;border-radius:8px}
   #micBtn.recording{color:var(--danger);animation:pulse 1s infinite}
+  .cam-only{display:none}
+  @media (pointer:coarse){ .icon-btn.cam-only{display:grid} .btn-soft.cam-only{display:block} }
+  .media-vid{max-width:min(260px,72vw);max-height:340px;border-radius:14px;display:block;background:#000}
+  .sendto-preview{display:flex;justify-content:center;margin:8px 0 14px}
+  .sendto-preview img,.sendto-preview video{max-width:170px;max-height:170px;border-radius:12px;background:#000}
+  .sendto-chip{background:var(--panel-2);border:1px solid var(--line);border-radius:10px;padding:10px 14px;font-size:14px}
   @keyframes pulse{50%{opacity:.4}}
   .stamp{font-size:10.5px;color:var(--muted);margin:2px 4px 4px;display:flex;gap:6px;align-items:center}
   .stamp .rt{color:var(--accent)}
@@ -271,10 +277,12 @@
 
       <div class="composer" id="composer" style="display:none">
         <button class="icon-btn" id="attachBtn" title="anexar foto ou ficheiro">📎</button>
+        <button class="icon-btn cam-only" id="camBtn" title="câmara (foto/vídeo)">📷</button>
         <button class="icon-btn" id="micBtn" title="gravar áudio">🎤</button>
         <input id="msg" placeholder="Mensagem" autocomplete="off">
         <button class="send" id="send">➤</button>
         <input type="file" id="fileInput" style="display:none">
+        <input type="file" id="camInput" accept="image/*,video/*" capture="environment" style="display:none">
       </div>
     </main>
 
@@ -319,6 +327,15 @@
           <button class="cancel" id="grpLeave" style="color:var(--danger);border:1px solid var(--danger)">Sair do grupo</button>
           <button class="cancel" id="closeGroup">fechar</button>
         </div>
+      </div>
+    </div>
+
+    <div class="sheet" id="sendToPanel">
+      <div class="sheet-card">
+        <h3>Enviar para</h3>
+        <div id="sendToPreview" class="sendto-preview"></div>
+        <div class="members" id="sendToList"></div>
+        <div class="sheet-actions" style="margin-top:14px"><button class="cancel" id="closeSendTo">cancelar</button></div>
       </div>
     </div>
 
@@ -399,6 +416,8 @@
         <button id="addPeer" class="btn-primary">Conversar</button>
         <div class="or-sep">ou</div>
         <button id="newGroup" class="btn-soft full">＋ Criar um grupo</button>
+        <button id="panelCamBtn" class="btn-soft full cam-only" style="margin-top:8px">📷 Tirar foto ou vídeo</button>
+        <input type="file" id="panelCamInput" accept="image/*,video/*" capture="environment" style="display:none">
         <div class="sheet-actions" style="margin-top:16px"><button class="cancel" id="closeNewConv">fechar</button></div>
       </div>
     </div>

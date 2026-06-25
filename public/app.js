@@ -52,10 +52,7 @@ function register() {
   Session.buildBundle(store, 5).then(bundle => { bundle.dn = displayName; ws.send(JSON.stringify({ type: "register", bundle })); });
 }
 function connect() {
-  // Configuração dinâmica do protocolo para evitar erros de Mixed Content
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  ws = new WebSocket(`${protocol}//${location.host}`);
-  
+  ws = new WebSocket(`ws://${location.host}`);
   ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token: authToken }));
   ws.onclose = () => { if (authToken) setTimeout(connect, 1500); };
   ws.onmessage = async ev => {
@@ -67,9 +64,8 @@ function connect() {
     else if (m.type === "deliver") await onDeliver(m.from, m.envelope);
   };
 }
-
 function handleAuthFail() {
-  localStorage.removeItem("ratchet-auth");
+  localStorage.removeItem("aegis-auth");
   authToken = null; entered = false;
   try { ws && ws.close(); } catch {}
   $("app").classList.remove("ready"); $("login").style.display = "flex";
@@ -102,11 +98,11 @@ async function onDeliver(from, envelope) {
   if (envelope.grp) { await gm.handleGroupMessage(envelope.grp); return; }
   ensureConvo(from);
   addContact(from);
-  sendProfileTo(from);
   if (envelope.dn) { peerNames.set(from, envelope.dn); persistKv(); if (from === activePeer) updateHeader(); renderSidebar(); }
   try {
     const res = await Session.decrypt(store, from, envelope);
     if (res.ignored) return; // mensagem cruzada (iniciação simultânea) — ignorada em silêncio
+    sendProfileTo(from); // só agora — a sessão (de recetor) já existe, não cria sessão em corrida
     const { plaintext, ratcheted, identityChanged } = res;
     if (identityChanged) { verified.delete(from); persistKv(); if (from === activePeer) updateHeader(); pushSys(from, `⚠ a identidade de ${displayOf(from)} mudou (dispositivo reposto). Verifica de novo o número de segurança.`); }
     if (plaintext[0] === "\u0001") { await handleControl(from, plaintext.slice(1)); return; }
@@ -180,6 +176,7 @@ function onGroupMessage(gid, from, dn, text, mine) {
 
 // ---- enviar ----
 const MEDIA_LIMIT = 2 * 1024 * 1024; // 2 MB por anexo
+const VIDEO_LIMIT = 16 * 1024 * 1024; // vídeos podem ser maiores (gravados curtos)
 const mediaPlaintext = m => "\u0002" + JSON.stringify({ kind: m.kind, name: m.name, mime: m.mime, data: m.data });
 
 async function sendPayload(peer, plaintext, msg) {
@@ -199,11 +196,12 @@ function sendMessage(text) {
   if (!activePeer) return;
   sendPayload(activePeer, text, { me: true, text, time: Date.now() });
 }
-function sendMediaMsg(media) {
-  if (!activePeer) return;
-  if (isGroup(activePeer)) { gm.send(gidOf(activePeer), mediaPlaintext(media)); return; }
-  sendPayload(activePeer, mediaPlaintext(media), { me: true, kind: media.kind, name: media.name, mime: media.mime, data: media.data, time: Date.now() });
+function sendMediaToPeer(peer, media) {
+  if (!peer) return;
+  if (isGroup(peer)) { gm.send(gidOf(peer), mediaPlaintext(media)); return; }
+  sendPayload(peer, mediaPlaintext(media), { me: true, kind: media.kind, name: media.name, mime: media.mime, data: media.data, time: Date.now() });
 }
+function sendMediaMsg(media) { if (activePeer) sendMediaToPeer(activePeer, media); }
 async function flushPending(peer) {
   const queue = pendingMsgs.get(peer);
   if (!queue || !queue.length) return;
@@ -245,16 +243,56 @@ async function compressImage(file) {
   return { kind: "image", mime: "image/jpeg", data: splitDataURL(out).b64 };
 }
 
+async function fileToMedia(file) {
+  if (file.type.startsWith("image/")) return await compressImage(file);
+  const isVideo = file.type.startsWith("video/");
+  const limit = isVideo ? VIDEO_LIMIT : MEDIA_LIMIT;
+  if (file.size > limit) { toast(`ficheiro demasiado grande (máx. ${Math.round(limit / 1048576)} MB)`); return null; }
+  const parts = splitDataURL(await blobToDataURL(file));
+  if (!parts) { toast("não consegui ler o ficheiro"); return null; }
+  const kind = isVideo ? "video" : file.type.startsWith("audio/") ? "audio" : "file";
+  return { kind, name: file.name || (isVideo ? "video" : "ficheiro"), mime: parts.mime, data: parts.b64 };
+}
+
 async function handleFile(file) {
   if (!file || !activePeer) return;
-  try {
-    if (file.type.startsWith("image/")) { sendMediaMsg(await compressImage(file)); return; }
-    if (file.size > MEDIA_LIMIT) { toast("ficheiro demasiado grande (máx. 2 MB)"); return; }
-    const parts = splitDataURL(await blobToDataURL(file));
-    if (!parts) { toast("não consegui ler o ficheiro"); return; }
-    const kind = file.type.startsWith("audio/") ? "audio" : "file";
-    sendMediaMsg({ kind, name: file.name, mime: parts.mime, data: parts.b64 });
-  } catch { toast("não consegui anexar o ficheiro"); }
+  try { const m = await fileToMedia(file); if (m) sendMediaMsg(m); }
+  catch { toast("não consegui anexar o ficheiro"); }
+}
+
+// captura da câmara a partir do painel inicial: escolhe-se o destino depois
+let pendingSendMedia = null;
+async function captureForPick(file) {
+  if (!file) return;
+  try { const m = await fileToMedia(file); if (m) openSendTo(m); }
+  catch { toast("não consegui usar a captura"); }
+}
+function openSendTo(media) {
+  pendingSendMedia = media;
+  $("newConvPanel").classList.remove("open");
+  const url = mediaUrl(media), p = $("sendToPreview");
+  if (media.kind === "image") p.innerHTML = `<img src="${url}" alt="">`;
+  else if (media.kind === "video") p.innerHTML = `<video src="${url}" controls muted></video>`;
+  else p.innerHTML = `<div class="sendto-chip">${mediaLabel(media)}</div>`;
+  const list = $("sendToList"), peers = new Set();
+  for (const k of convos.keys()) peers.add(k);
+  for (const u of contacts) peers.add(u);
+  if (!peers.size) { list.innerHTML = '<div class="contacts-empty">Sem conversas nem contactos. Abre uma conversa primeiro.</div>'; }
+  else {
+    list.innerHTML = "";
+    for (const u of peers) {
+      const grp = isGroup(u);
+      list.insertAdjacentHTML("beforeend",
+        `<div class="contact" data-u="${esc(u)}">${avatarOf(u, 34)}<div class="info"><div class="n">${esc(displayOf(u))}</div><div class="h">${grp ? "grupo" : "@" + esc(u)}</div></div></div>`);
+    }
+    list.querySelectorAll(".contact").forEach(el => el.onclick = () => {
+      const peer = el.dataset.u;
+      $("sendToPanel").classList.remove("open");
+      openPeer(peer);
+      if (pendingSendMedia) { sendMediaToPeer(peer, pendingSendMedia); pendingSendMedia = null; }
+    });
+  }
+  $("sendToPanel").classList.add("open");
 }
 
 let mediaRecorder = null, recChunks = [], recording = false;
@@ -404,10 +442,11 @@ function mediaUrl(m) { const mime = /^[\w.+-]+\/[\w.+-]+$/.test(m.mime || "") ? 
 function mediaBubble(m) {
   const url = mediaUrl(m);
   if (m.kind === "image") return `<img class="media-img" src="${url}" alt="imagem">`;
+  if (m.kind === "video") return `<video class="media-vid" src="${url}" controls preload="metadata"></video>`;
   if (m.kind === "audio") { const sig = m.data.length + "_" + m.data.slice(0, 16); return `<div class="bubble audio-player" data-sig="${sig}"><button class="ap-play" aria-label="reproduzir">▶</button><canvas class="ap-wave" width="160" height="30"></canvas><span class="ap-time">•••</span><audio class="ap-audio" src="${url}" preload="metadata"></audio></div>`; }
   return `<a class="bubble media-file" href="${url}" download="${esc(m.name || "ficheiro")}">📄 <span>${esc(m.name || "ficheiro")}</span></a>`;
 }
-function mediaLabel(m) { return m.kind === "image" ? "📷 Foto" : m.kind === "audio" ? "🎤 Áudio" : "📄 " + (m.name || "Ficheiro"); }
+function mediaLabel(m) { return m.kind === "image" ? "📷 Foto" : m.kind === "video" ? "🎥 Vídeo" : m.kind === "audio" ? "🎤 Áudio" : "📄 " + (m.name || "Ficheiro"); }
 
 // ---- leitor de áudio com onda + duração ----
 const waveCache = new Map(); // sig -> { peaks:[0..1], duration }
@@ -530,7 +569,7 @@ async function setDisappearing(secs) {
 // ---- nome público ----
 function setDisplayName(v) {
   displayName = (v || "").trim() || username;
-  localStorage.setItem("ratchet-dn-" + username, displayName);
+  localStorage.setItem("aegis-dn-" + username, displayName);
   peerNames.set(username, displayName); persistKv();
   $("meName").textContent = displayName;
   $("acHeadName").textContent = displayName;
@@ -575,8 +614,8 @@ function openProfile() {
 
 // ---- definições ----
 const settings = { sound: false, notify: false };
-try { Object.assign(settings, JSON.parse(localStorage.getItem("ratchet-settings") || "{}")); } catch {}
-const saveSettings = () => localStorage.setItem("ratchet-settings", JSON.stringify(settings));
+try { Object.assign(settings, JSON.parse(localStorage.getItem("aegis-settings") || "{}")); } catch {}
+const saveSettings = () => localStorage.setItem("aegis-settings", JSON.stringify(settings));
 function openSettings() {
   $("setSound").classList.toggle("on", settings.sound);
   $("setNotify").classList.toggle("on", settings.notify);
@@ -608,7 +647,7 @@ function onWipeClick() {
   if (!wipeArmed) { wipeArmed = true; $("acWipe").classList.add("armed"); $("acWipe").textContent = "Carrega outra vez para apagar tudo"; setTimeout(disarmWipe, 4000); return; }
   doWipe();
 }
-async function doWipe() { await wipe(username); localStorage.removeItem("ratchet-auth"); localStorage.removeItem("ratchet-dn-" + username); location.reload(); }
+async function doWipe() { await wipe(username); localStorage.removeItem("aegis-auth"); localStorage.removeItem("aegis-dn-" + username); location.reload(); }
 
 // ---- grupos ----
 function createGroupFlow() {
@@ -753,9 +792,9 @@ async function submitAuth() {
       }
       return;
     }
-    localStorage.setItem("ratchet-auth", JSON.stringify({ user: data.user, token: data.token }));
+    localStorage.setItem("aegis-auth", JSON.stringify({ user: data.user, token: data.token }));
     $("password").value = "";
-    pendingFirstTime = authMode === "signup" || !localStorage.getItem("ratchet-dn-" + data.user);
+    pendingFirstTime = authMode === "signup" || !localStorage.getItem("aegis-dn-" + data.user);
     authToken = data.token;
     connect(); // autentica e entra quando o servidor confirmar
   } catch { $("loginErr").textContent = "servidor indisponível"; $("enter").disabled = false; }
@@ -763,9 +802,9 @@ async function submitAuth() {
 async function enterApp(user) {
   entered = true;
   username = user;
-  const saved = localStorage.getItem("ratchet-dn-" + username);
+  const saved = localStorage.getItem("aegis-dn-" + username);
   displayName = saved || username;
-  localStorage.setItem("ratchet-dn-" + username, displayName);
+  localStorage.setItem("aegis-dn-" + username, displayName);
   peerNames.set(username, displayName);
   store = await createStore(username);
   gm = createGroupManager({
@@ -789,13 +828,13 @@ async function enterApp(user) {
   if (pendingFirstTime) { pendingFirstTime = false; setTimeout(openProfile, 300); }
 }
 function logout() {
-  const a = JSON.parse(localStorage.getItem("ratchet-auth") || "null");
+  const a = JSON.parse(localStorage.getItem("aegis-auth") || "null");
   if (a && a.token) fetch("/api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: a.token }) }).catch(() => {});
-  localStorage.removeItem("ratchet-auth");
+  localStorage.removeItem("aegis-auth");
   location.reload();
 }
 function autoLogin() {
-  const a = JSON.parse(localStorage.getItem("ratchet-auth") || "null");
+  const a = JSON.parse(localStorage.getItem("aegis-auth") || "null");
   if (a && a.user && a.token) { pendingFirstTime = false; authToken = a.token; connect(); }
 }
 
@@ -804,7 +843,7 @@ $("enter").onclick = submitAuth;
 $("toggleMode").onclick = () => setAuthMode(authMode === "login" ? "signup" : "login");
 $("username").addEventListener("keydown", e => { if (e.key === "Enter") $("password").focus(); });
 $("password").addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); });
-(() => { const a = JSON.parse(localStorage.getItem("ratchet-auth") || "null"); if (a && a.user) $("username").value = a.user; })();
+(() => { const a = JSON.parse(localStorage.getItem("aegis-auth") || "null"); if (a && a.user) $("username").value = a.user; })();
 $("fab").onclick = () => { $("newConvPanel").classList.add("open"); setTimeout(() => $("newPeer").focus(), 50); };
 $("closeNewConv").onclick = () => $("newConvPanel").classList.remove("open");
 const goNewPeer = () => { const v = $("newPeer").value; $("newPeer").value = ""; $("newConvPanel").classList.remove("open"); openPeer(v); };
@@ -826,6 +865,11 @@ $("msg").addEventListener("input", async () => {
 });
 $("attachBtn").onclick = () => $("fileInput").click();
 $("fileInput").onchange = e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ""; };
+$("camBtn").onclick = () => $("camInput").click();
+$("camInput").onchange = e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ""; };
+$("panelCamBtn").onclick = () => $("panelCamInput").click();
+$("panelCamInput").onchange = e => { const f = e.target.files[0]; if (f) captureForPick(f); e.target.value = ""; };
+$("closeSendTo").onclick = () => { $("sendToPanel").classList.remove("open"); pendingSendMedia = null; };
 $("micBtn").onclick = toggleRecord;
 $("stream").addEventListener("click", e => { const img = e.target.closest && e.target.closest("img.media-img"); if (img) { $("lightboxImg").src = img.src; $("lightbox").classList.add("open"); } });
 $("lightbox").onclick = () => { $("lightbox").classList.remove("open"); $("lightboxImg").src = ""; };

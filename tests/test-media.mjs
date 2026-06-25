@@ -44,6 +44,12 @@ const ok = (c, l) => { if (!c) fails++; console.log(`  ${c ? "\u2705" : "\u274c"
   const p2 = JSON.parse((await S.decrypt(bS, "alice", env2)).plaintext.slice(1));
   ok(p2.kind === "audio" && p2.data === audio.data, "segundo anexo (áudio) também ok");
 
+  // e um vídeo (da câmara) — payload maior, mesmo caminho
+  const video = { kind: "video", name: "video", mime: "video/webm", data: Buffer.alloc(512 * 1024, 9).toString("base64") };
+  const env3 = await S.encrypt(aS, "bob", mediaPlaintext(video));
+  const p3 = JSON.parse((await S.decrypt(bS, "alice", env3)).plaintext.slice(1));
+  ok(p3.kind === "video" && p3.data === video.data, "vídeo também chega intacto");
+
   console.log(fails === 0 ? "\u2705 ANEXOS OK" : `\u274c ${fails} falha(s)`);
   process.exit(fails === 0 ? 0 : 1);
 })();

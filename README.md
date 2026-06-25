@@ -1,7 +1,7 @@
 # AegisChat
 
 Um chat encriptado ponta-a-ponta, feito para aprender como o Signal funciona por
-dentro. Junta três peças por fases: cadeia simétrica de chaves,
+dentro. Junta as três peças que construímos por fases: cadeia simétrica de chaves,
 Double Ratchet (com ratchet de DH) e o aperto de mão X3DH. O servidor é só um
 relay — nunca vê texto em claro nem chaves privadas.
 
@@ -18,7 +18,10 @@ diferentes em cada separador (ex.: `alice` e `bob`), escreve o nome do outro em
 "novo contacto" e fala. A primeira mensagem dispara o X3DH; daí para a frente é
 o Double Ratchet a tratar de tudo. Também dá para enviar **fotos, ficheiros e
 áudio** (com gravação pelo microfone) — vão cifrados como o texto, com limite de
-2 MB por anexo; as imagens são comprimidas para caberem.
+2 MB por anexo; as imagens são comprimidas para caberem. No telemóvel há ainda
+um botão de câmara para tirar foto ou gravar vídeo e enviar na hora (até 16 MB
+de vídeo) — a partir de dentro da conversa, ou do painel inicial, escolhendo
+depois para quem enviar.
 
 A palavra-passe é guardada no servidor só como sal + hash **scrypt** (nunca em
 claro) e serve para autenticar quem és — ninguém pode publicar um bundle no teu
@@ -79,7 +82,7 @@ Isto é para aprender, não para produção. Faltam coisas que um sistema a sér
   Repara que isto **não** quebra o passado — as chaves antigas já foram apagadas
   e o ratchet não recua — mas quem dumpar o disco lê o que estiver nas cadeias
   atuais. O endurecimento óbvio é cifrar o armazenamento com uma chave derivada
-  de uma passphrase via Argon2id.
+  de uma passphrase via Argon2id (o mesmo que no KeyVault).
 - **Sem reposição de prekeys.** As OPKs gastam-se e não são repostas
   automaticamente.
 - **Grupos.** Usam *Sender Keys* com fan-out do lado do cliente e rotação de
