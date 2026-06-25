@@ -52,7 +52,8 @@ function register() {
   Session.buildBundle(store, 5).then(bundle => { bundle.dn = displayName; ws.send(JSON.stringify({ type: "register", bundle })); });
 }
 function connect() {
-  ws = new WebSocket(`ws://${location.host}`);
+  const scheme = location.protocol === "https:" ? "wss" : "ws";
+  ws = new WebSocket(`${scheme}://${location.host}`);
   ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token: authToken }));
   ws.onclose = () => { if (authToken) setTimeout(connect, 1500); };
   ws.onmessage = async ev => {
