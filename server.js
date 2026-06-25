@@ -58,7 +58,7 @@ const wss = new WebSocketServer({ server: http });
 // Bundles e mailbox persistem em disco para sobreviverem a reinícios do processo
 // (em discos efémeros como o free tier do Render, perdem-se na hibernação — por
 // isso o cliente também re-tenta sozinho de tempos a tempos).
-const DATA = join(__dirname, "data");
+const DATA = process.env.DATA_DIR || join(__dirname, "data");
 try { mkdirSync(DATA, { recursive: true }); } catch {}
 const BUNDLES_F = join(DATA, "bundles.json"), MAILBOX_F = join(DATA, "mailbox.json");
 const loadMap = f => { try { return new Map(Object.entries(JSON.parse(readFileSync(f, "utf8")))); } catch { return new Map(); } };

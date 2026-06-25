@@ -49,7 +49,9 @@ function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add(
 let authToken = null, entered = false, pendingFirstTime = false;
 function register() {
   if (!ws || ws.readyState !== 1) return;
-  Session.buildBundle(store, 5).then(bundle => { bundle.dn = displayName; ws.send(JSON.stringify({ type: "register", bundle })); });
+  Session.buildBundle(store, 5)
+    .then(bundle => { bundle.dn = displayName; ws.send(JSON.stringify({ type: "register", bundle })); })
+    .catch(err => { console.error("falha a publicar chaves:", err); setTimeout(register, 3000); });
 }
 function connect() {
   const scheme = location.protocol === "https:" ? "wss" : "ws";
@@ -357,17 +359,30 @@ function scheduleExpiry(peer, msg, ms) {
     const i = arr.indexOf(msg); if (i >= 0) { arr.splice(i, 1); persistThread(peer); if (peer === activePeer) renderStream(); renderSidebar(); }
   }, ms);
 }
+// arranca a contagem das mensagens RECEBIDAS de uma conversa — só quando são vistas
+// (conversa aberta e separador visível). As que eu enviei contam desde o envio.
+function startTtlCountdowns(peer) {
+  if (!peer || document.hidden) return;
+  const arr = threads.get(peer); if (!arr) return;
+  let changed = false;
+  for (const m of arr) if (!m.me && m.ttl && !m.expireAt) { m.expireAt = Date.now() + m.ttl * 1000; scheduleExpiry(peer, m, m.ttl * 1000); changed = true; }
+  if (changed) { persistThread(peer); if (peer === activePeer) renderStream(); renderSidebar(); }
+}
 function pushMsg(peer, msg) {
   ensureConvo(peer);
   if (!threads.has(peer)) threads.set(peer, []);
   const secs = dmTimer.get(peer) || 0;
-  if (secs > 0) { msg.expireAt = msg.time + secs * 1000; scheduleExpiry(peer, msg, secs * 1000); }
+  if (secs > 0) {
+    if (msg.me) { msg.expireAt = msg.time + secs * 1000; scheduleExpiry(peer, msg, secs * 1000); } // a minha cópia conta desde o envio
+    else msg.ttl = secs; // recetor: a contagem só começa quando a mensagem for vista
+  }
   threads.get(peer).push(msg);
   convos.get(peer).ts = msg.time || Date.now();
   persistThread(peer);
   if (peer === activePeer) { renderStream(); if (!msg.me && document.hidden) notifyIncoming(peer); }
   else if (!msg.me) { convos.get(peer).unread++; toast(`nova mensagem de ${displayOf(peer)}`); notifyIncoming(peer); }
   renderSidebar();
+  if (!msg.me && peer === activePeer && !document.hidden) startTtlCountdowns(peer); // estou a ver -> arranca já
 }
 function pushSys(peer, text) {
   ensureConvo(peer);
@@ -506,7 +521,7 @@ function renderStream() {
   s.innerHTML = "";
   for (const m of list) {
     if (m.sys) { s.insertAdjacentHTML("beforeend", `<div class="sys">${esc(m.text)}</div>`); continue; }
-    const ex = m.expireAt ? '<span title="apaga-se sozinha">⏱</span>' : "";
+    const ex = (m.expireAt || m.ttl) ? '<span title="apaga-se sozinha">⏱</span>' : "";
     const pend = m.pending ? '<span title="vai ser entregue quando a pessoa entrar">🕓 em espera</span>' : "";
     const sender = (!m.me && m.fromDn) ? `<div class="sender" style="color:${avColor(m.from)}">${esc(m.fromDn)}</div>` : "";
     const body = m.kind ? mediaBubble(m) : `<div class="bubble">${esc(m.text)}</div>`;
@@ -534,6 +549,7 @@ function openPeer(name) {
   $("verifyPanel").classList.remove("open"); $("dmPanel").classList.remove("open"); $("groupPanel").classList.remove("open");
   $("app").classList.add("chat-open");
   updateHeader(); renderSidebar(); renderStream();
+  startTtlCountdowns(name); // vi as mensagens -> arranca a contagem das temporárias recebidas
   $("msg").focus();
 }
 
@@ -943,3 +959,5 @@ autoLogin();
 
 // rede de segurança: re-tenta entregar mensagens em espera de tempos a tempos
 setInterval(() => { flushAllPending(); }, 12000);
+// ao voltar ao separador com uma conversa aberta, conta-se como "visto"
+document.addEventListener("visibilitychange", () => { if (!document.hidden) startTtlCountdowns(activePeer); });

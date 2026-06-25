@@ -21,10 +21,10 @@ export const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
 // ---- primitivas ----
 export async function genX() { const kp = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]); return { kp, pub: new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)) }; }
-export async function genEd() { const kp = await crypto.subtle.generateKey({ name: "Ed25519" }, true, ["sign", "verify"]); return { kp, pub: new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)) }; }
+export async function genEd() { const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]); return { kp, pub: new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)) }; }
 export async function dh(my, peerPub) { const peer = await crypto.subtle.importKey("raw", peerPub, { name: "X25519" }, false, []); return new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peer }, my.kp.privateKey, 256)); }
-export async function edSign(my, data) { return new Uint8Array(await crypto.subtle.sign({ name: "Ed25519" }, my.kp.privateKey, data)); }
-export async function edVerify(pub, sig, data) { const k = await crypto.subtle.importKey("raw", pub, { name: "Ed25519" }, false, ["verify"]); return crypto.subtle.verify({ name: "Ed25519" }, k, sig, data); }
+export async function edSign(my, data) { return new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, my.kp.privateKey, data)); }
+export async function edVerify(pub, sig, data) { try { const k = await crypto.subtle.importKey("raw", pub, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]); return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, k, sig, data); } catch { return false; } }
 
 async function hmac(key, msg) { const k = await crypto.subtle.importKey("raw", key, { name: "HMAC", hash: "SHA-256" }, false, ["sign"]); return new Uint8Array(await crypto.subtle.sign("HMAC", k, new Uint8Array(msg))); }
 async function hkdf(ikm, salt, info, len = 64) { const k = await crypto.subtle.importKey("raw", ikm, "HKDF", false, ["deriveBits"]); return new Uint8Array(await crypto.subtle.deriveBits({ name: "HKDF", hash: "SHA-256", salt, info: enc.encode(info) }, k, len * 8)); }

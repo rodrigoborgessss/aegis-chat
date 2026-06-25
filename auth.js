@@ -8,7 +8,7 @@ import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { join } from "path";
 import { fileURLToPath } from "url";
 
-const DIR = join(fileURLToPath(new URL(".", import.meta.url)), "data");
+const DIR = process.env.DATA_DIR || join(fileURLToPath(new URL(".", import.meta.url)), "data");
 const ACCOUNTS = join(DIR, "accounts.json");
 const SESSIONS = join(DIR, "sessions.json");
 

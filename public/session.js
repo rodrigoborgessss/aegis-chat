@@ -3,9 +3,10 @@
 import * as R from "./ratchet.js";
 
 // ---- identidade e prekeys ----
+const CRYPTO_V = 2; // 2 = assinaturas ECDSA P-256 (antes era Ed25519)
 export async function ensureIdentity(store) {
   let id = await store.getIdentity();
-  if (!id) { id = { IK: await R.genX(), IKsig: await R.genEd() }; await store.setIdentity(id); }
+  if (!id || id.v !== CRYPTO_V) { id = { v: CRYPTO_V, IK: await R.genX(), IKsig: await R.genEd() }; await store.setIdentity(id); await store.setSPK(null); }
   return id;
 }
 async function ensureSPK(store, IKsig) {

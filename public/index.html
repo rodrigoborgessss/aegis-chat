@@ -54,7 +54,8 @@
   .icon-btn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
   .icon-btn:hover{background:var(--panel-2);color:var(--text)}
   .fab-stack{position:absolute;right:16px;bottom:16px;z-index:6;display:flex;flex-direction:column;gap:12px;align-items:center}
-  .fab{width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;display:grid;place-items:center;box-shadow:0 8px 20px rgba(0,0,0,.45);border:none;cursor:pointer;transition:transform .12s,filter .12s,border-color .12s,background .12s}
+  .fab{width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;display:grid;place-items:center;padding:0;box-shadow:0 8px 20px rgba(0,0,0,.45);border:none;cursor:pointer;transition:transform .12s,filter .12s,border-color .12s,background .12s}
+  .fab svg{display:block}
   .fab-2{width:48px;height:48px;background:var(--panel-2);color:var(--accent);border:1px solid var(--line);box-shadow:0 6px 16px rgba(0,0,0,.38)}
   .fab-2:hover{border-color:var(--accent);background:var(--panel)}
   .fab:hover{filter:brightness(1.08);transform:translateY(-1px)}
@@ -259,7 +260,9 @@
             <circle cx="12" cy="13" r="3.2"/>
           </svg>
         </button>
-        <button class="fab" id="fab" title="nova conversa" aria-label="nova conversa">＋</button>
+        <button class="fab" id="fab" title="nova conversa" aria-label="nova conversa">
+          <svg viewBox="0 0 24 24" width="26" height="26" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M12 5v14M5 12h14"/></svg>
+        </button>
       </div>
       <input type="file" id="camFabInput" accept="image/*,video/*" capture="environment" style="display:none">
     </aside>
