@@ -59,6 +59,7 @@ function connect() {
   ws.onmessage = async ev => {
     const m = JSON.parse(ev.data);
     if (m.type === "authed") { if (!entered) await enterApp(m.user); else register(); }
+    else if (m.type === "registered") flushAllPending(); // (re)ligámos — tenta entregar o que ficou em espera
     else if (m.type === "authErr") handleAuthFail();
     else if (m.type === "bundle") { const r = pendingBundle.get(m.user); if (r) { pendingBundle.delete(m.user); r(m.bundle); } }
     else if (m.type === "available") flushPending(m.user);
@@ -217,6 +218,12 @@ async function flushPending(peer) {
   persistThread(peer);
   if (peer === activePeer) renderStream();
   renderSidebar();
+}
+// Re-tenta entregar tudo o que ficou em espera. Corre ao (re)ligar e num temporizador,
+// para auto-curar quando o aviso "available" se perde (ex.: servidor reiniciou no Render).
+async function flushAllPending() {
+  if (!ws || ws.readyState !== 1) return;
+  for (const peer of [...pendingMsgs.keys()]) await flushPending(peer);
 }
 
 // ---- anexos ----
@@ -868,8 +875,8 @@ $("attachBtn").onclick = () => $("fileInput").click();
 $("fileInput").onchange = e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ""; };
 $("camBtn").onclick = () => $("camInput").click();
 $("camInput").onchange = e => { const f = e.target.files[0]; if (f) handleFile(f); e.target.value = ""; };
-$("panelCamBtn").onclick = () => $("panelCamInput").click();
-$("panelCamInput").onchange = e => { const f = e.target.files[0]; if (f) captureForPick(f); e.target.value = ""; };
+$("camFab").onclick = () => $("camFabInput").click();
+$("camFabInput").onchange = e => { const f = e.target.files[0]; if (f) captureForPick(f); e.target.value = ""; };
 $("closeSendTo").onclick = () => { $("sendToPanel").classList.remove("open"); pendingSendMedia = null; };
 $("micBtn").onclick = toggleRecord;
 $("stream").addEventListener("click", e => { const img = e.target.closest && e.target.closest("img.media-img"); if (img) { $("lightboxImg").src = img.src; $("lightbox").classList.add("open"); } });
@@ -933,3 +940,6 @@ $("grpLeave").onclick = async () => {
 
 // tenta entrar logo se já houver uma sessão guardada (senão fica no ecrã de login)
 autoLogin();
+
+// rede de segurança: re-tenta entregar mensagens em espera de tempos a tempos
+setInterval(() => { flushAllPending(); }, 12000);

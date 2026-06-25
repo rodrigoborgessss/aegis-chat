@@ -5,6 +5,7 @@
 // e ciphertext. Estado em memória: reiniciar o servidor limpa tudo.
 import { createServer } from "http";
 import { readFile } from "fs/promises";
+import { readFileSync, writeFileSync, mkdirSync } from "fs";
 import { extname, join, normalize } from "path";
 import { fileURLToPath } from "url";
 import { WebSocketServer } from "ws";
@@ -54,10 +55,20 @@ const http = createServer(async (req, res) => {
 
 // --- relay WebSocket ---
 const wss = new WebSocketServer({ server: http });
-const bundles = new Map();    // nome -> bundle (persiste mesmo quando o user está offline)
+// Bundles e mailbox persistem em disco para sobreviverem a reinícios do processo
+// (em discos efémeros como o free tier do Render, perdem-se na hibernação — por
+// isso o cliente também re-tenta sozinho de tempos a tempos).
+const DATA = join(__dirname, "data");
+try { mkdirSync(DATA, { recursive: true }); } catch {}
+const BUNDLES_F = join(DATA, "bundles.json"), MAILBOX_F = join(DATA, "mailbox.json");
+const loadMap = f => { try { return new Map(Object.entries(JSON.parse(readFileSync(f, "utf8")))); } catch { return new Map(); } };
+const saveMap = (f, m) => { try { writeFileSync(f, JSON.stringify(Object.fromEntries(m))); } catch (e) { console.error("guardar falhou", f, e.message); } };
+const bundles = loadMap(BUNDLES_F); // nome -> bundle (público; sobrevive offline)
 const online = new Map();     // nome -> ws (só quem está ligado agora)
 const waiting = new Map();     // nome ainda desconhecido -> quem quer falar com ele
-const mailbox = new Map();    // nome -> [envelopes pendentes]
+const mailbox = loadMap(MAILBOX_F); // nome -> [envelopes pendentes]
+const saveBundles = () => saveMap(BUNDLES_F, bundles);
+const saveMailbox = () => saveMap(MAILBOX_F, mailbox);
 const send = (ws, obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
 
 // log com hora local — só metadados (quem, para quem, tamanho do ciphertext);
@@ -79,13 +90,13 @@ wss.on("connection", ws => {
     if (!me) { send(ws, { type: "authErr" }); return; } // tudo o resto exige sessão válida
 
     if (m.type === "register") {
-      bundles.set(me, m.bundle); // o servidor ignora qualquer username no pedido — usa o autenticado
+      bundles.set(me, m.bundle); saveBundles(); // o servidor ignora qualquer username no pedido — usa o autenticado
       online.set(me, ws);
       send(ws, { type: "registered", user: me });
       const pending = mailbox.get(me) || [];
       log(`entrou: ${me}  (online: ${online.size})${pending.length ? `  — ${pending.length} msg(s) em espera` : ""}`);
       for (const env of pending) send(ws, { type: "deliver", from: env.from, envelope: env.envelope });
-      mailbox.delete(me);
+      mailbox.delete(me); saveMailbox();
       const waiters = waiting.get(me);
       if (waiters) { for (const w of waiters) { const wsock = online.get(w); if (wsock) send(wsock, { type: "available", user: me }); } waiting.delete(me); }
       return;
@@ -96,6 +107,7 @@ wss.on("connection", ws => {
       const b = bundles.get(target);
       if (!b) { log(`${me} pediu bundle de ${target} — desconhecido (fica à espera)`); if (!waiting.has(target)) waiting.set(target, new Set()); waiting.get(target).add(me); send(ws, { type: "bundle", user: target, bundle: null }); return; }
       const opk = (b.opks && b.opks.length) ? b.opks.shift() : null; // uso único, consumida
+      if (opk) saveBundles();
       log(`${me} pediu bundle de ${target}  (OPK ${opk ? "entregue" : "esgotada"}, restam ${b.opks ? b.opks.length : 0})`);
       send(ws, { type: "bundle", user: target, bundle: { ik: b.ik, ikSig: b.ikSig, spk: b.spk, spkSig: b.spkSig, opk, dn: b.dn } });
       return;
@@ -106,7 +118,7 @@ wss.on("connection", ws => {
       const size = m.envelope?.dr?.ct ? m.envelope.dr.ct.length : 0;
       const dest = online.get(to);
       if (dest) { send(dest, { type: "deliver", from: me, envelope: m.envelope }); log(`${me} → ${to}: cifrado (${size} B)${m.envelope.x3dh ? " [+X3DH]" : ""}`); }
-      else { if (!mailbox.has(to)) mailbox.set(to, []); mailbox.get(to).push({ from: me, envelope: m.envelope }); log(`${me} → ${to}: cifrado (${size} B) — ${to} offline, guardado na mailbox`); }
+      else { if (!mailbox.has(to)) mailbox.set(to, []); mailbox.get(to).push({ from: me, envelope: m.envelope }); saveMailbox(); log(`${me} → ${to}: cifrado (${size} B) — ${to} offline, guardado na mailbox`); }
       return;
     }
   });

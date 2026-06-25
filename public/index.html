@@ -19,7 +19,7 @@
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px}
   ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
   html,body{margin:0;height:100%}
-  body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh;overflow:hidden;-webkit-font-smoothing:antialiased}
+  body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh;height:100dvh;overflow:hidden;-webkit-font-smoothing:antialiased}
   button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   input{font:inherit;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:10px 14px;outline:none}
   input:focus{border-color:var(--accent)}
@@ -63,7 +63,7 @@
   .new-conv input{flex:1;min-width:0}
   .add{background:var(--accent);color:#fff;border-radius:50%;width:40px;height:40px;flex:none;font-size:20px;display:grid;place-items:center;border:none;cursor:pointer}
   .add:hover{filter:brightness(1.08)}
-  .convos{flex:1;overflow-y:auto;padding-bottom:132px}
+  .convos{flex:1;overflow-y:auto;padding-bottom:190px}
   .convo{display:flex;align-items:center;gap:11px;padding:11px 14px;cursor:pointer;border-bottom:1px solid rgba(38,50,63,.5)}
   .convo:hover{background:var(--panel)} .convo.active{background:var(--panel-2)}
   .convo .avatar{width:42px;height:42px;font-size:17px}
@@ -119,7 +119,7 @@
   #lightbox img{max-width:100%;max-height:100%;border-radius:8px}
   #micBtn.recording{color:var(--danger);animation:pulse 1s infinite}
   .cam-only{display:none}
-  @media (pointer:coarse){ .icon-btn.cam-only{display:grid} .btn-soft.cam-only{display:block} }
+  @media (pointer:coarse){ .icon-btn.cam-only{display:grid} .btn-soft.cam-only{display:block} .fab.cam-only{display:grid} }
   .media-vid{max-width:min(260px,72vw);max-height:340px;border-radius:14px;display:block;background:#000}
   .sendto-preview{display:flex;justify-content:center;margin:8px 0 14px}
   .sendto-preview img,.sendto-preview video{max-width:170px;max-height:170px;border-radius:12px;background:#000}
@@ -253,8 +253,15 @@
             <path d="M9.6 16.4a3.6 3.6 0 0 1 6.8 0"/>
           </svg>
         </button>
+        <button class="fab fab-2 cam-only" id="camFab" title="câmara" aria-label="câmara">
+          <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M5 7h2.2l1.3-2h7l1.3 2H19a2 2 0 0 1 2 2v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V9a2 2 0 0 1 2-2z"/>
+            <circle cx="12" cy="13" r="3.2"/>
+          </svg>
+        </button>
         <button class="fab" id="fab" title="nova conversa" aria-label="nova conversa">＋</button>
       </div>
+      <input type="file" id="camFabInput" accept="image/*,video/*" capture="environment" style="display:none">
     </aside>
 
     <main class="main">
@@ -416,8 +423,6 @@
         <button id="addPeer" class="btn-primary">Conversar</button>
         <div class="or-sep">ou</div>
         <button id="newGroup" class="btn-soft full">＋ Criar um grupo</button>
-        <button id="panelCamBtn" class="btn-soft full cam-only" style="margin-top:8px">📷 Tirar foto ou vídeo</button>
-        <input type="file" id="panelCamInput" accept="image/*,video/*" capture="environment" style="display:none">
         <div class="sheet-actions" style="margin-top:16px"><button class="cancel" id="closeNewConv">fechar</button></div>
       </div>
     </div>
