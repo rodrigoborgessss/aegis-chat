@@ -20,9 +20,9 @@ export const b64 = u8 => {
 export const unb64 = s => Uint8Array.from(atob(s), c => c.charCodeAt(0));
 
 // ---- primitivas ----
-export async function genX() { const kp = await crypto.subtle.generateKey({ name: "X25519" }, true, ["deriveBits"]); return { kp, pub: new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)) }; }
+export async function genX() { const kp = await crypto.subtle.generateKey({ name: "ECDH", namedCurve: "P-256" }, true, ["deriveBits"]); return { kp, pub: new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)) }; }
 export async function genEd() { const kp = await crypto.subtle.generateKey({ name: "ECDSA", namedCurve: "P-256" }, true, ["sign", "verify"]); return { kp, pub: new Uint8Array(await crypto.subtle.exportKey("raw", kp.publicKey)) }; }
-export async function dh(my, peerPub) { const peer = await crypto.subtle.importKey("raw", peerPub, { name: "X25519" }, false, []); return new Uint8Array(await crypto.subtle.deriveBits({ name: "X25519", public: peer }, my.kp.privateKey, 256)); }
+export async function dh(my, peerPub) { const peer = await crypto.subtle.importKey("raw", peerPub, { name: "ECDH", namedCurve: "P-256" }, false, []); return new Uint8Array(await crypto.subtle.deriveBits({ name: "ECDH", public: peer }, my.kp.privateKey, 256)); }
 export async function edSign(my, data) { return new Uint8Array(await crypto.subtle.sign({ name: "ECDSA", hash: "SHA-256" }, my.kp.privateKey, data)); }
 export async function edVerify(pub, sig, data) { try { const k = await crypto.subtle.importKey("raw", pub, { name: "ECDSA", namedCurve: "P-256" }, false, ["verify"]); return await crypto.subtle.verify({ name: "ECDSA", hash: "SHA-256" }, k, sig, data); } catch { return false; } }
 
@@ -161,7 +161,7 @@ export const formatSafety = s => s.replace(/(.{5})/g, "$1 ").trim();
 
 // ---- Sender Keys (grupos) ----
 // Cada membro tem uma "sender key": uma cadeia simétrica (forward secrecy, como
-// na fase 1) + um par de assinatura Ed25519. A chave é partilhada pelo grupo,
+// na fase 1) + um par de assinatura ECDSA P-256. A chave é partilhada pelo grupo,
 // por isso cada mensagem é ASSINADA para se saber quem a mandou. A mensagem é
 // cifrada uma vez e reenviada a todos (fan-out).
 export async function groupSenderKey() { return { chainKey: rand(32), sign: await genEd() }; }
