@@ -18,7 +18,7 @@
   ::-webkit-scrollbar-track{background:transparent}
   ::-webkit-scrollbar-thumb{background:var(--line);border-radius:10px}
   ::-webkit-scrollbar-thumb:hover{background:var(--muted)}
-  html,body{margin:0;height:100%}
+  html,body{margin:0;height:100%;width:100%;max-width:100%;overflow-x:hidden}
   body{background:var(--bg);color:var(--text);font-family:var(--sans);height:100vh;height:100dvh;overflow:hidden;-webkit-font-smoothing:antialiased}
   button{font:inherit;cursor:pointer;border:none;background:none;color:inherit}
   input{font:inherit;background:var(--panel-2);border:1px solid var(--line);color:var(--text);border-radius:999px;padding:10px 14px;outline:none}
@@ -42,7 +42,7 @@
   .hint{margin-top:16px;font-size:12px;color:var(--muted);line-height:1.5}
 
   /* ---------- app shell ---------- */
-  #app{display:none;height:100%}
+  #app{display:none;height:100%;width:100%}
   #app.ready{display:flex}
   .sidebar{width:300px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--ink);position:relative}
   .me-bar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
@@ -206,12 +206,12 @@
   .select-empty{color:var(--muted);font-size:12.5px;padding:8px;text-align:center}
   img.avatar{object-fit:cover}
 
-  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10}
+  .toast{position:fixed;bottom:20px;left:50%;transform:translateX(-50%);max-width:calc(100vw - 32px);box-sizing:border-box;text-align:center;background:var(--panel-2);border:1px solid var(--line);color:var(--text);padding:10px 16px;border-radius:10px;font-size:13px;opacity:0;transition:opacity .2s;pointer-events:none;z-index:10}
   .toast.show{opacity:1}
 
   @media(max-width:680px){
     .sidebar{width:100%} .main{display:none}
-    #app.chat-open .sidebar{display:none} #app.chat-open .main{display:flex}
+    #app.chat-open .sidebar{display:none} #app.chat-open .main{display:flex;width:100%}
     .back{display:grid}
   }
 </style>
