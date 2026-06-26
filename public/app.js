@@ -795,7 +795,17 @@ function setAuthMode(m) {
   $("password").setAttribute("autocomplete", m === "login" ? "current-password" : "new-password");
   $("loginErr").textContent = "";
 }
+// WebCrypto só existe em contexto seguro (HTTPS ou localhost). Em HTTP simples
+// (ex.: abrir pelo IP local do PC no telemóvel) `crypto.subtle` é undefined.
+function cryptoOK() { return typeof crypto !== "undefined" && !!crypto.subtle; }
+function warnNoCrypto() {
+  const msg = "Encriptação indisponível aqui. Abre a app por HTTPS (o link do Render) — por HTTP só funciona em localhost, não pelo IP do PC.";
+  const e = $("loginErr"); if (e) e.textContent = msg;
+  const s = $("loginSub"); if (s) s.textContent = "Precisas de uma ligação segura (HTTPS).";
+  const b = $("enter"); if (b) b.disabled = true;
+}
 async function submitAuth() {
+  if (!cryptoOK()) { warnNoCrypto(); return; }
   const u = ($("username").value || "").trim().toLowerCase();
   const pw = $("password").value || "";
   if (!/^[a-z0-9_]{2,20}$/.test(u)) { $("loginErr").textContent = "username inválido (2-20: minúsculas, números, _)"; return; }
@@ -858,6 +868,7 @@ function logout() {
   location.reload();
 }
 function autoLogin() {
+  if (!cryptoOK()) { warnNoCrypto(); return; }
   const a = JSON.parse(localStorage.getItem("aegis-auth") || "null");
   if (a && a.user && a.token) { pendingFirstTime = false; authToken = a.token; connect(); }
 }
