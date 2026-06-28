@@ -18,17 +18,22 @@ async function ensureSPK(store, IKsig) {
   }
   return spk;
 }
-// bundle público para publicar no servidor
-export async function buildBundle(store, nOpks = 5) {
-  const id = await ensureIdentity(store);
-  const spk = await ensureSPK(store, id.IKsig);
+// gera n one-time prekeys novos, guarda-os localmente e devolve os públicos
+export async function genOPKs(store, n) {
   const opks = [];
-  for (let i = 0; i < nOpks; i++) {
+  for (let i = 0; i < n; i++) {
     const kp = await R.genX();
     const oid = R.b64(R.rand(4));
     await store.addOPK(oid, kp);
     opks.push({ id: oid, pub: R.b64(kp.pub) });
   }
+  return opks;
+}
+// bundle público para publicar no servidor
+export async function buildBundle(store, nOpks = 5) {
+  const id = await ensureIdentity(store);
+  const spk = await ensureSPK(store, id.IKsig);
+  const opks = await genOPKs(store, nOpks);
   return {
     ik: R.b64(id.IK.pub),
     ikSig: R.b64(id.IKsig.pub),

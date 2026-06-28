@@ -2,9 +2,10 @@
 // e mensagens temporárias por conversa. A lógica de cripto/sessão é a mesma.
 import { createStore, wipe } from "./store.js";
 import * as Session from "./session.js";
-import { safetyNumber, formatSafety, unb64 } from "./ratchet.js";
+import { safetyNumber, groupSafetyNumber, formatSafety, unb64 } from "./ratchet.js";
 import { createGroupManager } from "./group.js";
 import { dmWinner } from "./dmsync.js";
+import { deriveVaultKey, newSalt, makeVerifier, checkVerifier, vb64, vunb64 } from "./vault.js";
 
 const $ = id => document.getElementById(id);
 let store, ws, username = null, displayName = null, activePeer = null, gm = null;
@@ -53,6 +54,17 @@ function register() {
     .then(bundle => { bundle.dn = displayName; ws.send(JSON.stringify({ type: "register", bundle })); })
     .catch(err => { console.error("falha a publicar chaves:", err); setTimeout(register, 3000); });
 }
+let lastOPKtop = 0;
+async function replenishOPKs() {
+  if (!ws || ws.readyState !== 1 || !store) return;
+  const now = Date.now();
+  if (now - lastOPKtop < 5000) return; // no máximo uma reposição a cada 5s
+  lastOPKtop = now;
+  try {
+    const opks = await Session.genOPKs(store, 5);
+    ws.send(JSON.stringify({ type: "addOPKs", opks }));
+  } catch (err) { console.error("falha a repor prekeys:", err); }
+}
 function connect() {
   const scheme = location.protocol === "https:" ? "wss" : "ws";
   ws = new WebSocket(`${scheme}://${location.host}`);
@@ -65,6 +77,7 @@ function connect() {
     else if (m.type === "authErr") handleAuthFail();
     else if (m.type === "bundle") { const r = pendingBundle.get(m.user); if (r) { pendingBundle.delete(m.user); r(m.bundle); } }
     else if (m.type === "available") flushPending(m.user);
+    else if (m.type === "lowOPKs") await replenishOPKs();
     else if (m.type === "deliver") await onDeliver(m.from, m.envelope);
   };
 }
@@ -671,7 +684,7 @@ function onWipeClick() {
   if (!wipeArmed) { wipeArmed = true; $("acWipe").classList.add("armed"); $("acWipe").textContent = "Carrega outra vez para apagar tudo"; setTimeout(disarmWipe, 4000); return; }
   doWipe();
 }
-async function doWipe() { await wipe(username); localStorage.removeItem("aegis-auth"); localStorage.removeItem("aegis-dn-" + username); location.reload(); }
+async function doWipe() { sessionStorage.removeItem("aegis-vault-" + username); await wipe(username); localStorage.removeItem("aegis-auth"); localStorage.removeItem("aegis-dn-" + username); location.reload(); }
 
 // ---- grupos ----
 function createGroupFlow() {
@@ -707,6 +720,7 @@ function openGroupPanel() {
   $("grpMembers").innerHTML = gm.members(gid).map(m =>
     `<div class="mem${m === username ? "" : " tappable"}" data-u="${esc(m)}">${avatarOf(m, 28)}<span>${esc(m === username ? "tu" : displayOf(m))}</span></div>`).join("");
   $("grpMembers").querySelectorAll(".mem.tappable").forEach(el => el.onclick = () => { $("groupPanel").classList.remove("open"); openPeer(el.dataset.u); });
+  $("grpVerifyBox").style.display = "none";
   $("groupPanel").classList.add("open");
 }
 
@@ -833,6 +847,62 @@ async function submitAuth() {
     connect(); // autentica e entra quando o servidor confirmar
   } catch { $("loginErr").textContent = "servidor indisponível"; $("enter").disabled = false; }
 }
+async function unlockVault(user) {
+  const meta = await store.getVaultMeta();
+  const cacheKey = "aegis-vault-" + user;
+  if (meta) {
+    // opção B: a chave fica na sessão do separador (limpa ao fechar) — sem voltar a pedir em reloads
+    const cached = sessionStorage.getItem(cacheKey);
+    if (cached) {
+      try { const raw = vunb64(cached); if (await checkVerifier(raw, meta.verifier)) { store.unlock(raw); return; } } catch {}
+      sessionStorage.removeItem(cacheKey);
+    }
+    await promptVault("unlock", async (p, fail) => {
+      const raw = await deriveVaultKey(p, vunb64(meta.salt));
+      if (!await checkVerifier(raw, meta.verifier)) { fail("passphrase incorreta"); return false; }
+      store.unlock(raw); sessionStorage.setItem(cacheKey, vb64(raw)); return true;
+    });
+  } else {
+    // primeira vez neste dispositivo: criar o cofre e cifrar o que já exista
+    await promptVault("create", async (p) => {
+      const salt = newSalt();
+      const raw = await deriveVaultKey(p, salt);
+      store.unlock(raw);
+      await store.setVaultMeta({ salt: vb64(salt), verifier: await makeVerifier(raw) });
+      await store.reencryptAll();
+      sessionStorage.setItem(cacheKey, vb64(raw)); return true;
+    });
+  }
+}
+// mostra o ecrã de passphrase e chama handler(p, fail) até este devolver true
+function promptVault(mode, handler) {
+  return new Promise(resolve => {
+    const gate = $("vaultGate"), pass = $("vaultPass"), pass2 = $("vaultPass2"), go = $("vaultGo"), err = $("vaultErr");
+    const create = mode === "create";
+    $("vaultTitle").textContent = create ? "Cifrar este dispositivo" : "Desbloquear";
+    $("vaultDesc").textContent = create
+      ? "Define uma passphrase. Cifra a identidade, as sessões e o histórico guardados neste browser."
+      : "Introduz a passphrase deste dispositivo.";
+    go.textContent = create ? "Criar cofre" : "Desbloquear";
+    pass2.style.display = create ? "" : "none";
+    pass.value = ""; pass2.value = ""; err.textContent = "";
+    gate.style.display = "block";
+    setTimeout(() => pass.focus(), 50);
+    const reset = () => { go.disabled = false; go.textContent = create ? "Criar cofre" : "Desbloquear"; };
+    const fail = msg => { err.textContent = msg; reset(); pass.focus(); };
+    const submit = async () => {
+      const p = pass.value;
+      if (p.length < 8) return fail("mínimo 8 caracteres");
+      if (create && p !== pass2.value) return fail("as passphrases não coincidem");
+      go.disabled = true; go.textContent = "a derivar…"; err.textContent = "";
+      let ok = false;
+      try { ok = await handler(p, fail); } catch (e) { console.error(e); fail("erro ao derivar a chave"); return; }
+      if (ok) { go.onclick = null; pass.onkeydown = null; pass2.onkeydown = null; gate.style.display = "none"; resolve(); }
+    };
+    const onKey = e => { if (e.key === "Enter") submit(); };
+    go.onclick = submit; pass.onkeydown = onKey; pass2.onkeydown = onKey;
+  });
+}
 async function enterApp(user) {
   entered = true;
   username = user;
@@ -841,6 +911,7 @@ async function enterApp(user) {
   localStorage.setItem("aegis-dn-" + username, displayName);
   peerNames.set(username, displayName);
   store = await createStore(username);
+  await unlockVault(username);
   gm = createGroupManager({
     me: username,
     sendPairwise: (to, obj) => sendControl(to, obj),
@@ -864,6 +935,7 @@ async function enterApp(user) {
 function logout() {
   const a = JSON.parse(localStorage.getItem("aegis-auth") || "null");
   if (a && a.token) fetch("/api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: a.token }) }).catch(() => {});
+  if (a && a.user) sessionStorage.removeItem("aegis-vault-" + a.user);
   localStorage.removeItem("aegis-auth");
   location.reload();
 }
@@ -950,6 +1022,23 @@ $("ngCreate").onclick = doCreateGroup;
 $("ngCancel").onclick = () => $("newGroupPanel").classList.remove("open");
 $("ngMembers").addEventListener("keydown", e => { if (e.key === "Enter") doCreateGroup(); });
 $("groupBtn").onclick = openGroupPanel;
+$("grpVerifyBtn").onclick = async () => {
+  const gid = gidOf(activePeer);
+  const id = await store.getIdentity();
+  const parts = []; const missing = [];
+  for (const m of gm.members(gid)) {
+    if (m === username) { parts.push({ id: m, ik: id.IK.pub }); continue; }
+    const sess = await store.getSession(m);
+    if (sess && sess.peerIK) parts.push({ id: m, ik: unb64(sess.peerIK) });
+    else missing.push(m);
+  }
+  const num = await groupSafetyNumber(parts);
+  $("grpVerifyNum").textContent = formatSafety(num);
+  $("grpVerifyNote").textContent = missing.length
+    ? `Ainda não tenho as chaves de: ${missing.map(displayOf).join(", ")}. O número só coincide depois de trocar mensagens com toda a gente.`
+    : "Comparem estes 60 dígitos fora da app. Se forem iguais para todos os membros, ninguém no grupo tem a identidade trocada.";
+  $("grpVerifyBox").style.display = "block";
+};
 $("closeGroup").onclick = () => $("groupPanel").classList.remove("open");
 $("grpAddBtn").onclick = async () => { const u = $("grpAddUser").value.trim().toLowerCase(); if (!u) return; await gm.addMember(gidOf(activePeer), u); $("grpAddUser").value = ""; openGroupPanel(); updateHeader(); };
 $("grpLeave").onclick = async () => {

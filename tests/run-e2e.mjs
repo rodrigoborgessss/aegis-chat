@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
-const tests = ["e2e-server", "test-available", "test-auth"];
+const tests = ["e2e-server", "test-available", "test-auth", "test-replenish"];
 
 let failed = 0;
 for (const file of tests) {

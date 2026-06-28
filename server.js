@@ -108,8 +108,16 @@ wss.on("connection", ws => {
       if (!b) { log(`${me} pediu bundle de ${target} — desconhecido (fica à espera)`); if (!waiting.has(target)) waiting.set(target, new Set()); waiting.get(target).add(me); send(ws, { type: "bundle", user: target, bundle: null }); return; }
       const opk = (b.opks && b.opks.length) ? b.opks.shift() : null; // uso único, consumida
       if (opk) saveBundles();
-      log(`${me} pediu bundle de ${target}  (OPK ${opk ? "entregue" : "esgotada"}, restam ${b.opks ? b.opks.length : 0})`);
+      const left = b.opks ? b.opks.length : 0;
+      log(`${me} pediu bundle de ${target}  (OPK ${opk ? "entregue" : "esgotada"}, restam ${left})`);
       send(ws, { type: "bundle", user: target, bundle: { ik: b.ik, ikSig: b.ikSig, spk: b.spk, spkSig: b.spkSig, opk, dn: b.dn } });
+      if (left < 2) { const owner = online.get(target); if (owner) send(owner, { type: "lowOPKs", have: left }); } // pede reposição ao dono se estiver online
+      return;
+    }
+
+    if (m.type === "addOPKs") {
+      const b = bundles.get(me);
+      if (b && Array.isArray(m.opks)) { b.opks = (b.opks || []).concat(m.opks).slice(-30); saveBundles(); log(`${me} repôs prekeys  (tem agora ${b.opks.length})`); }
       return;
     }
 

@@ -132,7 +132,7 @@
   .sys{align-self:center;text-align:center;font-size:12px;color:var(--muted);background:rgba(224,162,78,.08);border:1px solid rgba(224,162,78,.25);padding:6px 12px;border-radius:10px;margin:6px 0;max-width:80%}
 
   .composer{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);align-items:center;background:var(--ink)}
-  .composer input{flex:1}
+  .composer input{flex:1;min-width:0}
   .composer .send{background:var(--accent);color:#fff;border-radius:50%;width:42px;height:42px;flex:none;display:grid;place-items:center;font-size:18px}
   .composer .send:disabled{opacity:.4;cursor:not-allowed}
 
@@ -235,6 +235,23 @@
     </div>
   </div>
 
+  <div id="vaultGate" style="display:none;position:fixed;inset:0;z-index:50;background:var(--bg)">
+    <div style="height:100%;display:flex;align-items:center;justify-content:center;padding:24px">
+      <div class="card">
+        <div class="logo">🗝️</div>
+        <h1 id="vaultTitle">Desbloquear</h1>
+        <p id="vaultDesc">Introduz a passphrase deste dispositivo.</p>
+        <div class="fields">
+          <input id="vaultPass" type="password" placeholder="passphrase" autocomplete="off" autocapitalize="off" spellcheck="false">
+          <input id="vaultPass2" type="password" placeholder="confirmar passphrase" autocomplete="off" autocapitalize="off" spellcheck="false" style="display:none">
+          <button id="vaultGo" class="go">Desbloquear</button>
+          <div class="login-foot"><span id="vaultErr" class="login-err"></span></div>
+        </div>
+        <div class="hint" id="vaultHint">Cifrada com Argon2id. Não há recuperação: se a esqueceres, este dispositivo perde o histórico (a conta no servidor mantém-se).</div>
+      </div>
+    </div>
+  </div>
+
   <div id="app">
     <aside class="sidebar">
       <div class="me-bar">
@@ -332,6 +349,11 @@
         <div class="new-conv" style="padding:0;border:none;margin-top:12px">
           <input id="grpAddUser" placeholder="adicionar username" autocomplete="off">
           <button class="add" id="grpAddBtn" title="adicionar">＋</button>
+        </div>
+        <button class="cancel" id="grpVerifyBtn" style="width:100%;margin-top:12px">Número de segurança do grupo</button>
+        <div id="grpVerifyBox" style="display:none;margin-top:10px">
+          <div class="num" id="grpVerifyNum">—</div>
+          <p class="desc" id="grpVerifyNote" style="margin-top:8px">Comparem estes 60 dígitos fora da app. Se forem iguais para todos os membros, ninguém no grupo tem a identidade trocada.</p>
         </div>
         <div class="sheet-actions" style="margin-top:14px">
           <button class="cancel" id="grpLeave" style="color:var(--danger);border:1px solid var(--danger)">Sair do grupo</button>
@@ -447,6 +469,7 @@
   </div>
 
   <div class="toast" id="toast"></div>
+  <script src="vendor/argon2.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

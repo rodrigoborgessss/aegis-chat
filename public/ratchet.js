@@ -159,6 +159,22 @@ export async function safetyNumber(myIK, myId, peerIK, peerId) {
 // formata 60 dígitos em 12 grupos de 5
 export const formatSafety = s => s.replace(/(.{5})/g, "$1 ").trim();
 
+// Número de segurança DE GRUPO: deriva-se das chaves de identidade de TODOS os
+// membros (ordenadas por nome, para todos chegarem ao mesmo valor). Permite
+// confirmar fora da app que o grupo não tem um intruso com identidade trocada.
+export async function groupSafetyNumber(members) {   // [{ id, ik:Uint8Array }]
+  const sorted = [...members].sort((a, b) => (a.id < b.id ? -1 : a.id > b.id ? 1 : 0));
+  let h = await sha512(enc.encode("aegis-group-v1"));
+  for (const m of sorted) h = await sha512(cat(h, m.ik, enc.encode(m.id)));
+  for (let i = 0; i < 1024; i++) h = await sha512(h);
+  let digits = "";
+  for (let g = 0; g < 12; g++) {                     // 12 grupos de 5 = 60 dígitos
+    let n = 0; for (let k = 0; k < 5; k++) n = (n * 256 + h[g * 5 + k]) % 100000;
+    digits += String(n).padStart(5, "0");
+  }
+  return digits;
+}
+
 // ---- Sender Keys (grupos) ----
 // Cada membro tem uma "sender key": uma cadeia simétrica (forward secrecy, como
 // na fase 1) + um par de assinatura ECDSA P-256. A chave é partilhada pelo grupo,
@@ -181,4 +197,18 @@ export async function groupAdvance(chainKey, steps) { // saltar mensagens em fal
   let ck = chainKey;
   for (let i = 0; i < steps; i++) ck = (await kdfCK(ck)).ck;
   return ck;
+}
+// Variantes baseadas em message-key, para tratar mensagens fora de ordem nos
+// grupos: derivamos a chave de mensagem de uma iteração concreta e guardamos as
+// chaves saltadas em cache (como o MKSKIPPED do pairwise) para abrir mensagens
+// que cheguem atrasadas.
+export async function groupStep(chainKey) { return await kdfCK(chainKey); } // -> { ck, mk }
+export async function groupSealMK(mk, signKp, pt) {
+  const { iv, ct } = await aesEnc(mk, pt, new Uint8Array(0));
+  const sig = await edSign(signKp, ct);
+  return { iv, ct, sig };
+}
+export async function groupOpenMK(mk, signPub, iv, ct, sig) {
+  if (!(await edVerify(signPub, sig, ct))) throw new Error("assinatura de grupo inválida");
+  return await aesDec(mk, iv, ct, new Uint8Array(0));
 }
