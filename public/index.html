@@ -51,7 +51,7 @@
   #app{display:none;height:100%;width:100%}
   #app.ready{display:flex}
   .sidebar{width:300px;flex:none;border-right:1px solid var(--line);display:flex;flex-direction:column;background:var(--ink);position:relative}
-  .me-bar{display:flex;align-items:center;gap:10px;padding:14px 16px;border-bottom:1px solid var(--line)}
+  .me-bar{display:flex;align-items:center;gap:10px;padding:14px 16px;padding-top:calc(14px + env(safe-area-inset-top, 0px));border-bottom:1px solid var(--line)}
   .me-id{display:flex;align-items:center;gap:10px;flex:1;min-width:0;cursor:pointer;border-radius:10px;padding:5px;margin:-5px}
   .me-id:hover{background:var(--panel-2)}
   .me-bar .avatar{width:36px;height:36px;font-size:15px}
@@ -59,7 +59,7 @@
   .me-bar .who .lbl{font-size:11px;color:var(--muted)} .me-bar .who .nm{font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .icon-btn{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:var(--muted)}
   .icon-btn:hover{background:var(--panel-2);color:var(--text)}
-  .fab-stack{position:absolute;right:16px;bottom:16px;z-index:6;display:flex;flex-direction:column;gap:12px;align-items:center}
+  .fab-stack{position:absolute;right:16px;bottom:calc(16px + env(safe-area-inset-bottom, 0px));z-index:6;display:flex;flex-direction:column;gap:12px;align-items:center}
   .fab{width:54px;height:54px;border-radius:50%;background:var(--accent);color:#fff;font-size:26px;display:grid;place-items:center;padding:0;box-shadow:0 8px 20px rgba(0,0,0,.45);border:none;cursor:pointer;transition:transform .12s,filter .12s,border-color .12s,background .12s}
   .fab svg{display:block}
   .fab-2{width:48px;height:48px;background:var(--panel-2);color:var(--accent);border:1px solid var(--line);box-shadow:0 6px 16px rgba(0,0,0,.38)}
@@ -82,7 +82,7 @@
   .main{flex:1;display:flex;flex-direction:column;min-width:0;background:var(--bg)}
   .chat-empty{flex:1;display:grid;place-items:center;color:var(--muted);text-align:center;padding:24px}
   .chat-empty .ico{font-size:40px;opacity:.5;margin-bottom:10px}
-  .chat-header{display:none;align-items:center;gap:11px;padding:11px 16px;border-bottom:1px solid var(--line);background:var(--ink)}
+  .chat-header{display:none;align-items:center;gap:11px;padding:11px 16px;padding-top:calc(11px + env(safe-area-inset-top, 0px));border-bottom:1px solid var(--line);background:var(--ink)}
   .chat-header .avatar{width:38px;height:38px;font-size:16px}
   .chat-header .ti{flex:1;min-width:0}
   .chat-header .nm{font-weight:600;display:flex;align-items:center;gap:7px}
@@ -137,7 +137,7 @@
   .row.me .stamp .rt{color:#bcd0ff}
   .sys{align-self:center;text-align:center;font-size:12px;color:var(--muted);background:rgba(224,162,78,.08);border:1px solid rgba(224,162,78,.25);padding:6px 12px;border-radius:10px;margin:6px 0;max-width:80%}
 
-  .composer{display:flex;gap:8px;padding:12px 14px;border-top:1px solid var(--line);align-items:center;background:var(--ink)}
+  .composer{display:flex;gap:8px;padding:12px 14px;padding-bottom:calc(12px + env(safe-area-inset-bottom, 0px));border-top:1px solid var(--line);align-items:center;background:var(--ink)}
   .composer input{flex:1;min-width:0}
   .composer .send{background:var(--accent);color:#fff;border-radius:50%;width:42px;height:42px;flex:none;display:grid;place-items:center;font-size:18px}
   .composer .send:disabled{opacity:.4;cursor:not-allowed}
