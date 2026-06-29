@@ -8,6 +8,18 @@ import { dmWinner } from "./dmsync.js";
 import { deriveVaultKey, newSalt, makeVerifier, checkVerifier, vb64, vunb64 } from "./vault.js";
 
 const $ = id => document.getElementById(id);
+
+// Endereço do servidor. Na WEB (servida pelo próprio servidor, ou PWA) usa
+// caminhos relativos e o host atual. EMPACOTADA numa app nativa (Capacitor), os
+// assets correm de uma origem local — o location.host é "localhost", não o
+// servidor — por isso o relay/API têm de apontar para o host remoto fixo.
+const REMOTE = "https://aegis-chat-rvk2.onrender.com"; // <-- o teu servidor
+const PACKAGED = !!(globalThis.Capacitor && globalThis.Capacitor.isNativePlatform && globalThis.Capacitor.isNativePlatform());
+const API_BASE = PACKAGED ? REMOTE : "";
+const WS_URL = PACKAGED
+  ? REMOTE.replace(/^http/, "ws")
+  : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}`;
+
 let store, ws, username = null, displayName = null, activePeer = null, gm = null;
 const threads = new Map();        // chave (username ou "#gid") -> [msgs]
 const pendingBundle = new Map();
@@ -66,8 +78,7 @@ async function replenishOPKs() {
   } catch (err) { console.error("falha a repor prekeys:", err); }
 }
 function connect() {
-  const scheme = location.protocol === "https:" ? "wss" : "ws";
-  ws = new WebSocket(`${scheme}://${location.host}`);
+  ws = new WebSocket(WS_URL);
   ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token: authToken }));
   ws.onclose = () => { if (authToken) setTimeout(connect, 1500); };
   ws.onmessage = async ev => {
@@ -826,7 +837,7 @@ async function submitAuth() {
   if (pw.length < 6) { $("loginErr").textContent = "palavra-passe com pelo menos 6 caracteres"; return; }
   $("enter").disabled = true; $("loginErr").textContent = "";
   try {
-    const res = await fetch("/api/" + authMode, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user: u, pass: pw }) });
+    const res = await fetch(API_BASE + "/api/" + authMode, { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ user: u, pass: pw }) });
     const data = await res.json();
     if (!res.ok) {
       $("enter").disabled = false;
@@ -934,10 +945,15 @@ async function enterApp(user) {
 }
 function logout() {
   const a = JSON.parse(localStorage.getItem("aegis-auth") || "null");
-  if (a && a.token) fetch("/api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: a.token }) }).catch(() => {});
+  if (a && a.token) fetch(API_BASE + "/api/logout", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ token: a.token }) }).catch(() => {});
   if (a && a.user) sessionStorage.removeItem("aegis-vault-" + a.user);
   localStorage.removeItem("aegis-auth");
   location.reload();
+}
+// PWA: regista o service worker. Na app nativa (Capacitor) não — os assets já
+// correm localmente e um SW só iria atrapalhar.
+if (!PACKAGED && "serviceWorker" in navigator) {
+  window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
 function autoLogin() {
   if (!cryptoOK()) { warnNoCrypto(); return; }

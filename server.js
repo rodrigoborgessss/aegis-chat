@@ -14,12 +14,13 @@ import * as auth from "./auth.js";
 const __dirname = fileURLToPath(new URL(".", import.meta.url));
 const PUBLIC = join(__dirname, "public");
 const PORT = process.env.PORT || 8080;
-const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon" };
+const TYPES = { ".html": "text/html", ".js": "text/javascript", ".css": "text/css", ".ico": "image/x-icon", ".json": "application/json", ".webmanifest": "application/manifest+json", ".png": "image/png", ".svg": "image/svg+xml", ".wasm": "application/wasm" };
+const CORS = { "Access-Control-Allow-Origin": "*", "Access-Control-Allow-Methods": "POST, OPTIONS", "Access-Control-Allow-Headers": "Content-Type" };
 
 // --- ficheiros estáticos + API de autenticação ---
 const USER_RE = /^[a-z0-9_]{2,20}$/;
 const readJson = req => new Promise(resolve => { let d = ""; req.on("data", c => { d += c; if (d.length > 10000) req.destroy(); }); req.on("end", () => { try { resolve(JSON.parse(d || "{}")); } catch { resolve({}); } }); });
-const jsonRes = (res, code, obj) => { res.writeHead(code, { "Content-Type": "application/json" }); res.end(JSON.stringify(obj)); };
+const jsonRes = (res, code, obj) => { res.writeHead(code, { "Content-Type": "application/json", ...CORS }); res.end(JSON.stringify(obj)); };
 
 async function handleApi(req, res) {
   const body = await readJson(req);
@@ -41,6 +42,7 @@ async function handleApi(req, res) {
 }
 
 const http = createServer(async (req, res) => {
+  if (req.method === "OPTIONS" && req.url.startsWith("/api/")) { res.writeHead(204, CORS); res.end(); return; }
   if (req.method === "POST" && req.url.startsWith("/api/")) return handleApi(req, res);
   let path = decodeURIComponent(req.url.split("?")[0]);
   if (path === "/") path = "/index.html";
