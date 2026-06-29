@@ -8,6 +8,11 @@ import { dmWinner } from "./dmsync.js";
 import { deriveVaultKey, newSalt, makeVerifier, checkVerifier, vb64, vunb64 } from "./vault.js";
 
 const $ = id => document.getElementById(id);
+// Foca um input só com rato/teclado. No telemóvel — e em especial no PWA em
+// standalone no iOS — focar por código deixa o campo "focado sem teclado": o
+// toque seguinte não muda o foco e o teclado nunca abre. Em touch deixamos o
+// utilizador tocar no campo (foco genuíno -> teclado abre).
+const softFocus = el => { if (el && window.matchMedia && window.matchMedia("(pointer:fine)").matches) el.focus(); };
 
 // Endereço do servidor. Na WEB (servida pelo próprio servidor, ou PWA) usa
 // caminhos relativos e o host atual. EMPACOTADA numa app nativa (Capacitor), os
@@ -574,7 +579,10 @@ function openPeer(name) {
   $("app").classList.add("chat-open");
   updateHeader(); renderSidebar(); renderStream();
   startTtlCountdowns(name); // vi as mensagens -> arranca a contagem das temporárias recebidas
-  $("msg").focus();
+  // Só auto-focar com rato/teclado. Em telemóvel (e sobretudo no PWA em standalone),
+  // focar o input por código deixa-o "focado sem teclado": o toque seguinte não muda
+  // o foco e o iOS nunca abre o teclado. Deixamos o utilizador tocar.
+  softFocus($("msg"));
 }
 
 // ---- verificação ----
@@ -703,7 +711,7 @@ function createGroupFlow() {
   ngSelected = new Set();
   renderNgContacts();
   $("newGroupPanel").classList.add("open");
-  setTimeout(() => $("ngName").focus(), 50);
+  setTimeout(() => softFocus($("ngName")), 50);
 }
 function renderNgContacts() {
   const el = $("ngContacts");
@@ -845,7 +853,7 @@ async function submitAuth() {
         setAuthMode("login");
         $("username").value = u;
         $("loginErr").textContent = "Esse username já existe — entra com a tua palavra-passe.";
-        $("password").value = ""; $("password").focus();
+        $("password").value = ""; softFocus($("password"));
       } else {
         $("loginErr").textContent = data.error || "erro";
       }
@@ -898,9 +906,9 @@ function promptVault(mode, handler) {
     pass2.style.display = create ? "" : "none";
     pass.value = ""; pass2.value = ""; err.textContent = "";
     gate.style.display = "block";
-    setTimeout(() => pass.focus(), 50);
+    setTimeout(() => softFocus(pass), 50);
     const reset = () => { go.disabled = false; go.textContent = create ? "Criar cofre" : "Desbloquear"; };
-    const fail = msg => { err.textContent = msg; reset(); pass.focus(); };
+    const fail = msg => { err.textContent = msg; reset(); softFocus(pass); };
     const submit = async () => {
       const p = pass.value;
       if (p.length < 8) return fail("mínimo 8 caracteres");
@@ -967,7 +975,7 @@ $("toggleMode").onclick = () => setAuthMode(authMode === "login" ? "signup" : "l
 $("username").addEventListener("keydown", e => { if (e.key === "Enter") $("password").focus(); });
 $("password").addEventListener("keydown", e => { if (e.key === "Enter") submitAuth(); });
 (() => { const a = JSON.parse(localStorage.getItem("aegis-auth") || "null"); if (a && a.user) $("username").value = a.user; })();
-$("fab").onclick = () => { $("newConvPanel").classList.add("open"); setTimeout(() => $("newPeer").focus(), 50); };
+$("fab").onclick = () => { $("newConvPanel").classList.add("open"); setTimeout(() => softFocus($("newPeer")), 50); };
 $("closeNewConv").onclick = () => $("newConvPanel").classList.remove("open");
 const goNewPeer = () => { const v = $("newPeer").value; $("newPeer").value = ""; $("newConvPanel").classList.remove("open"); openPeer(v); };
 $("addPeer").onclick = goNewPeer;
