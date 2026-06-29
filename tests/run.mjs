@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const root = join(here, "..");
-const tests = ["test-integration", "test-group", "test-group-ooo", "test-group-verify", "test-vault", "test-persist", "test-safety", "test-wipe", "test-crossing", "test-resync", "test-ooo", "test-media", "test-dmsync"];
+const tests = ["test-integration", "test-group", "test-group-ooo", "test-group-verify", "test-vault", "test-push", "test-persist", "test-safety", "test-wipe", "test-crossing", "test-resync", "test-ooo", "test-media", "test-dmsync"];
 
 let failed = 0;
 for (const file of tests) {

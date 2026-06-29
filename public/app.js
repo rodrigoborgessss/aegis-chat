@@ -64,7 +64,49 @@ const dmLabel = s => ({ 0: "desligado", 10: "10 segundos", 60: "1 minuto", 300: 
 function toast(t) { const el = $("toast"); el.textContent = t; el.classList.add("show"); setTimeout(() => el.classList.remove("show"), 2600); }
 
 // ---- ligação ----
-let authToken = null, entered = false, pendingFirstTime = false;
+let authToken = null, entered = false, pendingFirstTime = false, vapidKey = null;
+
+// Web Push: converte a chave pública VAPID (base64url) em bytes para o subscribe
+const urlB64ToBytes = s => {
+  const pad = "=".repeat((4 - s.length % 4) % 4);
+  const b = atob((s + pad).replace(/-/g, "+").replace(/_/g, "/"));
+  return Uint8Array.from(b, c => c.charCodeAt(0));
+};
+async function swReg() { return ("serviceWorker" in navigator) ? navigator.serviceWorker.ready : null; }
+// pedido EXPLÍCITO (a partir das definições): pede permissão e subscreve
+async function enablePush() {
+  if (!("Notification" in window) || !("serviceWorker" in navigator) || !("PushManager" in window)) { toast("notificações não suportadas neste dispositivo"); return false; }
+  if (!vapidKey) { toast("ainda a ligar ao servidor — tenta daqui a pouco"); return false; }
+  const perm = await Notification.requestPermission();
+  if (perm !== "granted") { toast("permissão de notificações negada"); return false; }
+  try {
+    const reg = await swReg(); if (!reg) return false;
+    const sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(vapidKey) });
+    ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "pushSub", sub: sub.toJSON() }));
+    localStorage.setItem("aegis-push", "1");
+    toast("notificações ativadas");
+    return true;
+  } catch (e) { console.error("subscribe falhou", e); toast("não consegui ativar as notificações"); return false; }
+}
+// na reconexão, se já houver permissão, reenvia a subscrição (mantém o servidor a par)
+async function maybeResubscribePush() {
+  if (localStorage.getItem("aegis-push") !== "1" || Notification.permission !== "granted" || !vapidKey) return;
+  try {
+    const reg = await swReg(); if (!reg) return;
+    let sub = await reg.pushManager.getSubscription();
+    if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(vapidKey) });
+    ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "pushSub", sub: sub.toJSON() }));
+  } catch (e) { console.error("resubscribe falhou", e); }
+}
+async function disablePush() {
+  localStorage.removeItem("aegis-push");
+  try {
+    const reg = await swReg(); if (!reg) return;
+    const sub = await reg.pushManager.getSubscription();
+    if (sub) { ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "pushUnsub", endpoint: sub.endpoint })); await sub.unsubscribe(); }
+  } catch {}
+  toast("notificações desativadas");
+}
 function register() {
   if (!ws || ws.readyState !== 1) return;
   Session.buildBundle(store, 5)
@@ -94,6 +136,7 @@ function connect() {
     else if (m.type === "bundle") { const r = pendingBundle.get(m.user); if (r) { pendingBundle.delete(m.user); r(m.bundle); } }
     else if (m.type === "available") flushPending(m.user);
     else if (m.type === "lowOPKs") await replenishOPKs();
+    else if (m.type === "pushKey") { vapidKey = m.key; maybeResubscribePush(); }
     else if (m.type === "deliver") await onDeliver(m.from, m.envelope);
   };
 }
@@ -1022,11 +1065,13 @@ $("closeProfile").onclick = () => $("profilePanel").classList.remove("open");
 $("setSound").onclick = () => { settings.sound = !settings.sound; $("setSound").classList.toggle("on", settings.sound); saveSettings(); if (settings.sound) beep(); };
 $("setNotify").onclick = async () => {
   if (!settings.notify) {
-    if (!("Notification" in window)) { toast("este browser não suporta notificações"); return; }
-    const perm = await Notification.requestPermission();
-    if (perm !== "granted") { toast("permissão de notificações negada"); return; }
+    const ok = await enablePush();          // pede permissão + subscreve push em segundo plano
+    if (!ok) return;
     settings.notify = true;
-  } else settings.notify = false;
+  } else {
+    settings.notify = false;
+    await disablePush();
+  }
   $("setNotify").classList.toggle("on", settings.notify); saveSettings();
 };
 $("acSaveName").onclick = () => setDisplayName($("acName").value);
