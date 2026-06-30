@@ -156,6 +156,19 @@ apontar para `npm start`. Atenção a uma coisa: **o disco do free tier é efém
 — reinícios apagam `data/`, o que faz cair contas, bundles e mailbox. Para
 guardar entre reinícios, monta um disco persistente e aponta-lhe o `DATA_DIR`.
 
+**Notificações (chave VAPID estável).** A chave VAPID tem de ser a mesma entre
+deploys — se mudar, as subscrições já feitas passam a dar `400
+VapidPkHashMismatch`. Como o disco efémero apaga a chave a cada deploy, gera-a
+uma vez e põe-na nas variáveis de ambiente (que persistem):
+
+```bash
+node tools/gen-vapid.mjs   # imprime VAPID_PUBLIC e VAPID_PRIVATE
+```
+
+Cola as duas no painel de Environment do Render e faz redeploy. A partir daí a
+chave é estável; quem já tinha subscrito antes precisa de voltar a ligar as
+notificações uma vez (a subscrição antiga ficou presa à chave anterior).
+
 ## Testes
 
 ```bash
