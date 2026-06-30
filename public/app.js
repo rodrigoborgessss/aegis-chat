@@ -96,6 +96,7 @@ async function maybeResubscribePush() {
     let sub = await reg.pushManager.getSubscription();
     if (!sub) sub = await reg.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: urlB64ToBytes(vapidKey) });
     ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "pushSub", sub: sub.toJSON() }));
+    ws && ws.readyState === 1 && ws.send(JSON.stringify({ type: "pushNames", on: !!settings.names }));
   } catch (e) { console.error("resubscribe falhou", e); }
 }
 async function disablePush() {
@@ -712,12 +713,13 @@ function openProfile() {
 }
 
 // ---- definições ----
-const settings = { sound: false, notify: false };
+const settings = { sound: false, notify: false, names: false };
 try { Object.assign(settings, JSON.parse(localStorage.getItem("aegis-settings") || "{}")); } catch {}
 const saveSettings = () => localStorage.setItem("aegis-settings", JSON.stringify(settings));
 function openSettings() {
   $("setSound").classList.toggle("on", settings.sound);
   $("setNotify").classList.toggle("on", settings.notify);
+  $("setNames").classList.toggle("on", settings.names);
   disarmWipe();
   $("settingsPanel").classList.add("open");
 }
@@ -1010,6 +1012,25 @@ if (!PACKAGED && "serviceWorker" in navigator) {
   navigator.serviceWorker.addEventListener("controllerchange", () => { if (!refreshing) { refreshing = true; location.reload(); } });
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
+
+// Mantém a app fixa à área VISÍVEL. Sem o overflow:hidden no body (tirado para o
+// teclado abrir no iOS), o documento podia deslocar-se ao abrir o teclado e
+// ficava "para cima" depois de enviar. Com a VisualViewport ajustamos a altura à
+// zona visível (o compositor fica sempre acima do teclado) e travamos o scroll do
+// documento — só a lista de mensagens é que rola.
+if (window.visualViewport) {
+  const vv = window.visualViewport;
+  const fit = () => {
+    const h = Math.round(vv.height) + "px";
+    document.documentElement.style.height = h;
+    document.body.style.height = h;
+    if (window.scrollY || window.scrollX) window.scrollTo(0, 0);
+  };
+  vv.addEventListener("resize", fit);
+  vv.addEventListener("scroll", fit);
+  window.addEventListener("orientationchange", () => setTimeout(fit, 250));
+  fit();
+}
 function autoLogin() {
   if (!cryptoOK()) { warnNoCrypto(); return; }
   const a = JSON.parse(localStorage.getItem("aegis-auth") || "null");
@@ -1077,6 +1098,13 @@ $("setNotify").onclick = async () => {
     await disablePush();
   }
   $("setNotify").classList.toggle("on", settings.notify); saveSettings();
+};
+$("setNames").onclick = () => {
+  settings.names = !settings.names;
+  $("setNames").classList.toggle("on", settings.names);
+  saveSettings();
+  if (ws && ws.readyState === 1) ws.send(JSON.stringify({ type: "pushNames", on: settings.names }));
+  if (settings.names && !settings.notify) toast("liga também as Notificações para isto ter efeito");
 };
 $("acSaveName").onclick = () => setDisplayName($("acName").value);
 $("acName").addEventListener("keydown", e => { if (e.key === "Enter") setDisplayName($("acName").value); });

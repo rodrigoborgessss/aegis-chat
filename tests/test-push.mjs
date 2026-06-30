@@ -49,6 +49,32 @@ const [he, pe, se] = jwtE.split(".");
 check(crypto.verify("sha256", Buffer.from(`${he}.${pe}`), { key: pkE, dsaEncoding: "ieee-p1363" }, Buffer.from(se, "base64url")), "JWT assinado com a chave da env verifica");
 delete process.env.VAPID_PUBLIC; delete process.env.VAPID_PRIVATE;
 
+// --- cifragem do payload (RFC 8291 / aes128gcm): cifrar como servidor e decifrar
+//     como o browser faria, para garantir que o nome do remetente chega íntegro ---
+import { _encryptPayload } from "../push.js";
+const hkdf = (salt, ikm, info, len) => Buffer.from(crypto.hkdfSync("sha256", ikm, salt, info, len));
+// "dispositivo": par ECDH + segredo auth (o que o pushManager.subscribe geraria)
+const ua = crypto.createECDH("prime256v1"); const uaPub = ua.generateKeys();
+const authSecret = crypto.randomBytes(16);
+const sub = { keys: { p256dh: uaPub.toString("base64url"), auth: authSecret.toString("base64url") } };
+
+const msg = JSON.stringify({ from: "Pedro" });
+const bodyBuf = _encryptPayload(sub.keys.p256dh, sub.keys.auth, msg);
+// decifrar como UA
+const salt = bodyBuf.subarray(0, 16);
+const idlen = bodyBuf[20];
+const asPub = bodyBuf.subarray(21, 21 + idlen);
+const ct = bodyBuf.subarray(21 + idlen);
+const shared = ua.computeSecret(asPub);
+const ikm = hkdf(authSecret, shared, Buffer.concat([Buffer.from("WebPush: info\0"), uaPub, asPub]), 32);
+const cek = hkdf(salt, ikm, Buffer.from("Content-Encoding: aes128gcm\0"), 16);
+const nonce = hkdf(salt, ikm, Buffer.from("Content-Encoding: nonce\0"), 12);
+const tag = ct.subarray(ct.length - 16), enc = ct.subarray(0, ct.length - 16);
+const dec = crypto.createDecipheriv("aes-128-gcm", cek, nonce); dec.setAuthTag(tag);
+let plain = Buffer.concat([dec.update(enc), dec.final()]);
+plain = plain.subarray(0, plain.length - 1); // tira o delimitador 0x02
+check(plain.toString("utf8") === msg, "payload cifrado (RFC 8291) decifra de volta ao original");
+
 rmSync(F, { force: true });
 console.log(fails === 0 ? "\n\u2705 WEB PUSH (VAPID) OK" : `\n\u274c ${fails} falha(s)`);
 process.exit(fails === 0 ? 0 : 1);

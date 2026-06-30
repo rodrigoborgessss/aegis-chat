@@ -62,18 +62,41 @@ export function vapidJWT(aud) {
   return `${input}.${sig.toString("base64url")}`;
 }
 
-// envia um push vazio. devolve o status HTTP (201 ok; 404/410 = subscrição morta)
-export async function sendPush(sub) {
+// Cifragem do payload do Web Push (RFC 8291 / aes128gcm). O nome do remetente vai
+// CIFRADO com a chave da subscrição do destinatário — a Apple/Google só veem
+// bytes; só o dispositivo decifra. Sem payload, o push fica "sem conteúdo".
+const hkdf = (salt, ikm, info, len) => Buffer.from(crypto.hkdfSync("sha256", ikm, salt, info, len));
+function encryptPayload(uaPubB64, authB64, plaintext) {
+  const uaPub = Buffer.from(uaPubB64, "base64url");      // chave pública do destinatário (65 B)
+  const authSecret = Buffer.from(authB64, "base64url");  // segredo auth (16 B)
+  const salt = crypto.randomBytes(16);
+  const ecdh = crypto.createECDH("prime256v1");
+  const asPub = ecdh.generateKeys();                     // par efémero do servidor
+  const shared = ecdh.computeSecret(uaPub);
+  const ikm = hkdf(authSecret, shared, Buffer.concat([Buffer.from("WebPush: info\0"), uaPub, asPub]), 32);
+  const cek = hkdf(salt, ikm, Buffer.from("Content-Encoding: aes128gcm\0"), 16);
+  const nonce = hkdf(salt, ikm, Buffer.from("Content-Encoding: nonce\0"), 12);
+  const record = Buffer.concat([Buffer.from(plaintext, "utf8"), Buffer.from([0x02])]); // delimitador do último registo
+  const c = crypto.createCipheriv("aes-128-gcm", cek, nonce);
+  const ct = Buffer.concat([c.update(record), c.final(), c.getAuthTag()]);
+  const rs = Buffer.alloc(4); rs.writeUInt32BE(4096, 0);
+  const header = Buffer.concat([salt, rs, Buffer.from([asPub.length]), asPub]); // salt|rs|idlen|keyid
+  return Buffer.concat([header, ct]);
+}
+export { encryptPayload as _encryptPayload }; // exposto para testes
+
+// envia um push (com payload opcional, cifrado). devolve { status, reason }.
+export async function sendPush(sub, payload) {
   const url = new URL(sub.endpoint);
   const jwt = vapidJWT(`${url.protocol}//${url.host}`);
+  const headers = { Authorization: `vapid t=${jwt}, k=${pubB64url}`, TTL: "2419200" };
+  let body;
+  if (payload && sub.keys && sub.keys.p256dh && sub.keys.auth) {
+    body = encryptPayload(sub.keys.p256dh, sub.keys.auth, payload);
+    headers["Content-Encoding"] = "aes128gcm";
+  }
   try {
-    const res = await fetch(sub.endpoint, {
-      method: "POST",
-      headers: {
-        Authorization: `vapid t=${jwt}, k=${pubB64url}`,
-        TTL: "2419200",
-      },
-    });
+    const res = await fetch(sub.endpoint, { method: "POST", headers, body });
     let reason = "";
     if (res.status >= 400) { try { reason = (await res.text()).slice(0, 180).replace(/\s+/g, " ").trim(); } catch {} }
     return { status: res.status, reason };

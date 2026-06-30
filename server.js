@@ -71,28 +71,34 @@ const online = new Map();     // nome -> ws (só quem está ligado agora)
 const waiting = new Map();     // nome ainda desconhecido -> quem quer falar com ele
 const mailbox = loadMap(MAILBOX_F); // nome -> [envelopes pendentes]
 const pushSubs = loadMap(SUBS_F);   // nome -> [subscrições Web Push]
+const NAMES_F = join(DATA, "pushnames.json");
+const pushNames = loadMap(NAMES_F);  // nome -> 1 se quer ver o nome do remetente na notificação
 const saveBundles = () => saveMap(BUNDLES_F, bundles);
 const saveMailbox = () => saveMap(MAILBOX_F, mailbox);
 const saveSubs = () => saveMap(SUBS_F, pushSubs);
+const saveNames = () => saveMap(NAMES_F, pushNames);
 const VAPID_PUB = initVapid(join(DATA, "vapid.json")); // par estável em disco
 const send = (ws, obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
 
-// avisa (sem conteúdo) todas as subscrições de um utilizador offline; remove as mortas
-async function notifyPush(user) {
+// avisa as subscrições de um utilizador offline; nome do remetente vai CIFRADO no
+// payload se o destinatário tiver essa opção ligada. remove subscrições mortas.
+async function notifyPush(user, fromName) {
   const subs = pushSubs.get(user); if (!subs || !subs.length) return;
+  const payload = (pushNames.has(user) && fromName) ? JSON.stringify({ from: fromName }) : null;
   const alive = [], out = [];
-  for (const s of subs) { const r = await sendPush(s); out.push(r.reason ? `${r.status}(${r.reason})` : `${r.status}`); if (r.status !== 404 && r.status !== 410) alive.push(s); }
+  for (const s of subs) { const r = await sendPush(s, payload); out.push(r.reason ? `${r.status}(${r.reason})` : `${r.status}`); if (r.status !== 404 && r.status !== 410) alive.push(s); }
   if (alive.length) pushSubs.set(user, alive); else pushSubs.delete(user);
   saveSubs();
-  log(`push → ${user}: ${out.join(" , ")}`);
+  log(`push → ${user}: ${out.join(" , ")}${payload ? " [+nome]" : ""}`);
 }
 // Junta vários envelopes do mesmo destinatário num único push (cada mensagem do
 // utilizador gera ~2 envios: controlo + texto). Espera 3s; se a pessoa entretanto
 // ficar online, nem chega a incomodar.
-const pushTimers = new Map();
-function schedulePush(user) {
+const pushTimers = new Map(), pushFrom = new Map();
+function schedulePush(user, fromName) {
+  pushFrom.set(user, fromName);
   if (pushTimers.has(user) || online.has(user)) return;
-  pushTimers.set(user, setTimeout(() => { pushTimers.delete(user); if (!online.has(user)) notifyPush(user); }, 3000));
+  pushTimers.set(user, setTimeout(() => { pushTimers.delete(user); const f = pushFrom.get(user); pushFrom.delete(user); if (!online.has(user)) notifyPush(user, f); }, 3000));
 }
 
 // log com hora local — só metadados (quem, para quem, tamanho do ciphertext);
@@ -163,12 +169,18 @@ wss.on("connection", ws => {
       return;
     }
 
+    if (m.type === "pushNames") {
+      if (m.on) pushNames.set(me, 1); else pushNames.delete(me);
+      saveNames();
+      return;
+    }
+
     if (m.type === "send") {
       const to = (m.to || "").toLowerCase();
       const size = m.envelope?.dr?.ct ? m.envelope.dr.ct.length : 0;
       const dest = online.get(to);
       if (dest) { send(dest, { type: "deliver", from: me, envelope: m.envelope }); log(`${me} → ${to}: cifrado (${size} B)${m.envelope.x3dh ? " [+X3DH]" : ""}`); }
-      else { if (!mailbox.has(to)) mailbox.set(to, []); mailbox.get(to).push({ from: me, envelope: m.envelope }); saveMailbox(); schedulePush(to); log(`${me} → ${to}: cifrado (${size} B) — ${to} offline, guardado na mailbox`); }
+      else { if (!mailbox.has(to)) mailbox.set(to, []); mailbox.get(to).push({ from: me, envelope: m.envelope }); saveMailbox(); schedulePush(to, bundles.get(me)?.dn || me); log(`${me} → ${to}: cifrado (${size} B) — ${to} offline, guardado na mailbox`); }
       return;
     }
   });
