@@ -48,10 +48,10 @@ export async function sendPush(sub) {
       headers: {
         Authorization: `vapid t=${jwt}, k=${pubB64url}`,
         TTL: "2419200",
-        Urgency: "high",
-        "Content-Length": "0",
       },
     });
-    return res.status;
-  } catch { return 0; }
+    let reason = "";
+    if (res.status >= 400) { try { reason = (await res.text()).slice(0, 180).replace(/\s+/g, " ").trim(); } catch {} }
+    return { status: res.status, reason };
+  } catch (e) { return { status: 0, reason: String(e && e.message || e) }; }
 }

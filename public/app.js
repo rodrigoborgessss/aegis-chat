@@ -1051,7 +1051,7 @@ $("closeSendTo").onclick = () => { $("sendToPanel").classList.remove("open"); pe
 $("micBtn").onclick = toggleRecord;
 $("stream").addEventListener("click", e => { const img = e.target.closest && e.target.closest("img.media-img"); if (img) { $("lightboxImg").src = img.src; $("lightbox").classList.add("open"); } });
 $("lightbox").onclick = () => { $("lightbox").classList.remove("open"); $("lightboxImg").src = ""; };
-$("backBtn").onclick = () => $("app").classList.remove("chat-open");
+$("backBtn").onclick = () => { $("app").classList.remove("chat-open"); activePeer = null; renderSidebar(); };
 $("verifyBtn").onclick = showSafetyNumber;
 $("convMenuBtn").onclick = openConvMenu;
 $("cmCancel").onclick = () => $("convMenu").classList.remove("open");
