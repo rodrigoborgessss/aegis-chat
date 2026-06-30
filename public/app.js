@@ -127,7 +127,7 @@ async function replenishOPKs() {
 function connect() {
   ws = new WebSocket(WS_URL);
   ws.onopen = () => ws.send(JSON.stringify({ type: "auth", token: authToken }));
-  ws.onclose = () => { if (authToken) setTimeout(connect, 1500); };
+  ws.onclose = () => { if (authToken && !backgrounded) setTimeout(connect, 1500); };
   ws.onmessage = async ev => {
     const m = JSON.parse(ev.data);
     if (m.type === "authed") { if (!entered) await enterApp(m.user); else register(); }
@@ -1133,4 +1133,14 @@ autoLogin();
 // rede de segurança: re-tenta entregar mensagens em espera de tempos a tempos
 setInterval(() => { flushAllPending(); }, 12000);
 // ao voltar ao separador com uma conversa aberta, conta-se como "visto"
-document.addEventListener("visibilitychange", () => { if (!document.hidden) startTtlCountdowns(activePeer); });
+// Em segundo plano, desliga o WebSocket para ficares OFFLINE depressa — assim as
+// mensagens vão para a mailbox e recebes push. Ao voltar, religa e apanha o que
+// ficou pendente. (Sem isto, o ws fica meio-aberto e demora a estoirar.)
+let backgrounded = false, bgTimer = null;
+function goOffline() { backgrounded = true; clearTimeout(bgTimer); if (ws && ws.readyState <= 1) try { ws.close(); } catch {} }
+function goOnline() { backgrounded = false; clearTimeout(bgTimer); if (authToken && (!ws || ws.readyState >= 2)) connect(); }
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden) { bgTimer = setTimeout(goOffline, 2000); }   // 2s de tolerância para trocas rápidas de app
+  else { clearTimeout(bgTimer); if (backgrounded) goOnline(); startTtlCountdowns(activePeer); }
+});
+window.addEventListener("pagehide", goOffline);   // app fechada / navegação: desliga já

@@ -102,6 +102,8 @@ const log = (...a) => console.log(`[${ts()}]`, ...a);
 
 wss.on("connection", ws => {
   let me = null; // username autenticado (só fica definido depois de um token válido)
+  ws.isAlive = true;
+  ws.on("pong", () => { ws.isAlive = true; });
   ws.on("message", raw => {
     let m; try { m = JSON.parse(raw); } catch { return; }
 
@@ -173,5 +175,17 @@ wss.on("connection", ws => {
 
   ws.on("close", () => { if (me && online.get(me) === ws) { online.delete(me); log(`saiu: ${me}  (online: ${online.size})`); } });
 });
+
+// Heartbeat: apanha quem fechou a app sem o ws fechar (suspensão no iOS). Sem
+// pong em ~30s, a ligação é dada como morta -> o utilizador fica offline -> as
+// mensagens seguintes vão para a mailbox e disparam push.
+const beat = setInterval(() => {
+  for (const ws of wss.clients) {
+    if (ws.isAlive === false) { ws.terminate(); continue; }
+    ws.isAlive = false;
+    try { ws.ping(); } catch {}
+  }
+}, 15000);
+wss.on("close", () => clearInterval(beat));
 
 http.listen(PORT, () => console.log(`relay em http://localhost:${PORT}  (abre em dois separadores)`));
