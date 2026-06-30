@@ -1,7 +1,7 @@
 // sw.js — service worker do PWA. Mete em cache o "casco" da app para abrir
 // offline e instalar no ecrã inicial. Não toca na API (/api/*) nem no WebSocket
 // (que nem sequer passa por aqui). Para publicar uma versão nova, sobe o CACHE.
-const CACHE = "aegis-v7";
+const CACHE = "aegis-v8";
 const ASSETS = [
   "/", "/index.html", "/app.js",
   "/ratchet.js", "/session.js", "/group.js", "/store.js", "/vault.js", "/dmsync.js",
@@ -44,8 +44,8 @@ self.addEventListener("fetch", e => {
 
 // --- notificações push (sem conteúdo: só avisa que há mensagem) ---
 self.addEventListener("push", e => {
-  e.waitUntil(self.registration.showNotification("AegisChat", {
-    body: "Nova mensagem", icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "aegis-msg",
+  e.waitUntil(self.registration.showNotification("Nova mensagem", {
+    icon: "/icons/icon-192.png", badge: "/icons/icon-192.png", tag: "aegis-msg", renotify: true,
   }));
 });
 self.addEventListener("notificationclick", e => {

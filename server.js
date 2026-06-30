@@ -86,6 +86,14 @@ async function notifyPush(user) {
   saveSubs();
   log(`push → ${user}: ${out.join(" , ")}`);
 }
+// Junta vários envelopes do mesmo destinatário num único push (cada mensagem do
+// utilizador gera ~2 envios: controlo + texto). Espera 3s; se a pessoa entretanto
+// ficar online, nem chega a incomodar.
+const pushTimers = new Map();
+function schedulePush(user) {
+  if (pushTimers.has(user) || online.has(user)) return;
+  pushTimers.set(user, setTimeout(() => { pushTimers.delete(user); if (!online.has(user)) notifyPush(user); }, 3000));
+}
 
 // log com hora local — só metadados (quem, para quem, tamanho do ciphertext);
 // o servidor não tem acesso ao conteúdo, por isso nunca pode registá-lo.
@@ -158,7 +166,7 @@ wss.on("connection", ws => {
       const size = m.envelope?.dr?.ct ? m.envelope.dr.ct.length : 0;
       const dest = online.get(to);
       if (dest) { send(dest, { type: "deliver", from: me, envelope: m.envelope }); log(`${me} → ${to}: cifrado (${size} B)${m.envelope.x3dh ? " [+X3DH]" : ""}`); }
-      else { if (!mailbox.has(to)) mailbox.set(to, []); mailbox.get(to).push({ from: me, envelope: m.envelope }); saveMailbox(); notifyPush(to); log(`${me} → ${to}: cifrado (${size} B) — ${to} offline, guardado na mailbox`); }
+      else { if (!mailbox.has(to)) mailbox.set(to, []); mailbox.get(to).push({ from: me, envelope: m.envelope }); saveMailbox(); schedulePush(to); log(`${me} → ${to}: cifrado (${size} B) — ${to} offline, guardado na mailbox`); }
       return;
     }
   });
