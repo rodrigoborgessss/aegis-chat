@@ -80,10 +80,11 @@ const send = (ws, obj) => { try { ws.send(JSON.stringify(obj)); } catch {} };
 // avisa (sem conteúdo) todas as subscrições de um utilizador offline; remove as mortas
 async function notifyPush(user) {
   const subs = pushSubs.get(user); if (!subs || !subs.length) return;
-  const alive = [];
-  for (const s of subs) { const st = await sendPush(s); if (st !== 404 && st !== 410) alive.push(s); }
+  const alive = [], codes = [];
+  for (const s of subs) { const st = await sendPush(s); codes.push(st); if (st !== 404 && st !== 410) alive.push(s); }
   if (alive.length) pushSubs.set(user, alive); else pushSubs.delete(user);
   saveSubs();
+  log(`push → ${user}: ${codes.join(",")} (201=ok, 404/410=morta)`);
 }
 
 // log com hora local — só metadados (quem, para quem, tamanho do ciphertext);

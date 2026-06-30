@@ -1,7 +1,7 @@
 // sw.js — service worker do PWA. Mete em cache o "casco" da app para abrir
 // offline e instalar no ecrã inicial. Não toca na API (/api/*) nem no WebSocket
 // (que nem sequer passa por aqui). Para publicar uma versão nova, sobe o CACHE.
-const CACHE = "aegis-v5";
+const CACHE = "aegis-v6";
 const ASSETS = [
   "/", "/index.html", "/app.js",
   "/ratchet.js", "/session.js", "/group.js", "/store.js", "/vault.js", "/dmsync.js",

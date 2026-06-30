@@ -1004,6 +1004,10 @@ function logout() {
 // PWA: regista o service worker. Na app nativa (Capacitor) não — os assets já
 // correm localmente e um SW só iria atrapalhar.
 if (!PACKAGED && "serviceWorker" in navigator) {
+  // Atualização automática: quando um SW novo assume o controlo, recarrega para
+  // apanhar os assets novos — SEM reinstalar (reinstalar apagaria as chaves).
+  let refreshing = false;
+  navigator.serviceWorker.addEventListener("controllerchange", () => { if (!refreshing) { refreshing = true; location.reload(); } });
   window.addEventListener("load", () => navigator.serviceWorker.register("sw.js").catch(() => {}));
 }
 function autoLogin() {
